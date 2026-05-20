@@ -1,0 +1,128 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id          String         @id @default(uuid())
+  platform_id String         @unique
+  name        String
+  role        Role           @default(CLIENTE)
+  created_at  DateTime       @default(now())
+  orders      Order[]        @relation("ClientOrders")
+  chats       SupplierChat[]
+}
+
+model Product {
+  id             String          @id @default(uuid())
+  name           String
+  description    String?
+  category       ProductCategory
+  cost_price     Decimal?
+  selling_price  Decimal?
+  stock_quantity Int             @default(0)
+  min_threshold  Int             @default(2)
+  is_active      Boolean         @default(true)
+  created_at     DateTime        @default(now())
+  updated_at     DateTime        @updatedAt
+  order_items    OrderItem[]
+}
+
+model Order {
+  id           String              @id @default(uuid())
+  client_id    String
+  client       User                @relation("ClientOrders", fields: [client_id], references: [id])
+  total_price  Decimal?
+  status       OrderStatus         @default(CONSULTANDO)
+  notes        String?
+  items        OrderItem[]
+  chat_thread  SupplierChat?
+  conversation ClientConversation?
+  created_at   DateTime            @default(now())
+  updated_at   DateTime            @updatedAt
+}
+
+model OrderItem {
+  id         String   @id @default(uuid())
+  order_id   String
+  product_id String
+  quantity   Int      @default(1)
+  unit_price Decimal?
+  order      Order    @relation(fields: [order_id], references: [id])
+  product    Product  @relation(fields: [product_id], references: [id])
+}
+
+// B2B: conversación vía Gmail con proveedores
+model SupplierChat {
+  id              String   @id @default(uuid())
+  order_id        String   @unique
+  order           Order    @relation(fields: [order_id], references: [id])
+  supplier_id     String?
+  supplier        User?    @relation(fields: [supplier_id], references: [id])
+  supplier_email  String?
+  gmail_thread_id String?  // ID del hilo en Gmail para emparejar respuestas
+  messages_json   Json     @default("[]")
+  is_resolved     Boolean  @default(false)
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+}
+
+// B2C: conversación web con clientes
+model ClientConversation {
+  id            String   @id @default(uuid())
+  session_id    String   @unique
+  client_name   String   @default("Cliente")
+  order_id      String?  @unique
+  order         Order?   @relation(fields: [order_id], references: [id])
+  messages_json Json     @default("[]")
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+}
+
+model EmbeddingDocument {
+  id            String   @id @default(uuid())
+  content       String
+  metadata_json Json     @default("{}")
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+}
+
+model AdminUser {
+  id         String   @id @default(uuid())
+  email      String   @unique
+  password   String
+  name       String
+  created_at DateTime @default(now())
+}
+
+enum Role {
+  CLIENTE
+  PROVEEDOR
+  ADMIN
+}
+
+enum ProductCategory {
+  ACCESORIO
+  SMARTPHONE
+  KIT_DIRECTV
+  KIT_STARLINK
+  INSTALACION
+  TABLET
+  IMPRESORA
+  PANEL_SOLAR
+  CAMARA
+}
+
+enum OrderStatus {
+  CONSULTANDO
+  ESPERANDO_PROVEEDOR
+  COTIZADO
+  PAGO_PENDIENTE
+  PAGO_CONFIRMADO
+  EN_RUTA
+  COMPLETADO
+  CANCELADO
+}

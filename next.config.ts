@@ -1,7 +1,11 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  serverExternalPackages: ["@prisma/client", "bcryptjs", "@xenova/transformers"],
+  experimental: {
+    optimizePackageImports: ["groq-sdk"],
+  },
+  turbopack: {},
 };
 
 export default nextConfig;
