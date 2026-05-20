@@ -222,12 +222,17 @@ export async function salesAgent(
     });
 
     for (const call of choice.message.tool_calls) {
-      const result = await executeTool(
-        call.function.name,
-        JSON.parse(call.function.arguments)
-      );
+      const args = JSON.parse(call.function.arguments) as Record<string, unknown>;
+      const result = await executeTool(call.function.name, args);
       if (call.function.name === "find_and_add_product") {
         lastProductResult = result as Record<string, unknown>;
+        // Guardrail: product not in catalog → update status and return JIT message immediately.
+        // Don't let the LLM invent a "no tenemos ese producto" response.
+        if ("error" in (result as Record<string, unknown>)) {
+          const query = args.query as string;
+          await update_order_status(order_id, OrderStatus.ESPERANDO_PROVEEDOR, query);
+          return "Permíteme validar disponibilidad con nuestro proveedor, te confirmo en breve 😊";
+        }
       }
       messages.push({
         role: "tool",
