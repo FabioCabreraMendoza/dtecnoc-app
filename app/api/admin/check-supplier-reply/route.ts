@@ -1,14 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/middleware-auth";
 import { prisma } from "@/lib/prisma";
+import { gmail_v1 } from "googleapis";
 import { gmail, extractBodyFromPayload } from "@/lib/gmail";
 import { supplierAgent } from "@/lib/agents/supplier";
 
-type GmailMessage = Awaited<ReturnType<typeof gmail.users.messages.get>>["data"];
-
-function getFrom(msg: GmailMessage): string {
+function getFrom(msg: gmail_v1.Schema$Message): string {
   const headers = msg.payload?.headers ?? [];
-  return headers.find((h) => h.name?.toLowerCase() === "from")?.value ?? "";
+  return (
+    headers.find((h: gmail_v1.Schema$MessagePartHeader) => h.name?.toLowerCase() === "from")
+      ?.value ?? ""
+  );
 }
 
 async function handler(req: NextRequest) {
