@@ -24,6 +24,7 @@ PASO 0 — SALUDO O MENSAJE GENÉRICO:
 PASO 1 — CONSULTA DE PRODUCTO:
 - Llama find_and_add_product SOLO si el cliente está preguntando por un producto que AÚN NO está en el pedido (items vacíos o producto diferente). NUNCA la llames si el cliente simplemente confirma interés ("sí", "quiero", "me interesa", "acepto") o si el pedido ya tiene ese producto.
 - Si el resultado tiene is_just_in_time = true o stock_quantity = 0: responde EXACTAMENTE "Permíteme validar disponibilidad con nuestro proveedor, te confirmo en breve 😊" y llama update_order_status con ESPERANDO_PROVEEDOR. NO menciones ningún precio.
+- Si find_and_add_product devuelve error (producto no encontrado en el catálogo): responde EXACTAMENTE "Permíteme validar disponibilidad con nuestro proveedor, te confirmo en breve 😊" y llama update_order_status con ESPERANDO_PROVEEDOR y requested_product igual al nombre exacto del producto que pidió el cliente.
 - Si stock_quantity > 0: informa el precio real usando SIEMPRE el formato "S/ XXX" (soles peruanos, NUNCA $ ni USD). Si el campo other_results tiene más modelos disponibles, mencionarlos brevemente. Invita al cliente a confirmar interés.
 - Si el pedido ya tiene items (items.length > 0) y el cliente confirma ("sí", "quiero", "acepto", "me interesa"): ve DIRECTAMENTE al PASO 4. NO llames find_and_add_product ni update_order_status(ESPERANDO_PROVEEDOR).
 
@@ -83,7 +84,7 @@ const TOOLS: Groq.Chat.ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "update_order_status",
-      description: "Actualiza el estado del pedido. Solo usa: ESPERANDO_PROVEEDOR (producto sin stock) o PAGO_PENDIENTE (cliente listo para pagar, datos completos).",
+      description: "Actualiza el estado del pedido. Solo usa: ESPERANDO_PROVEEDOR (producto sin stock o no en catálogo) o PAGO_PENDIENTE (cliente listo para pagar, datos completos).",
       parameters: {
         type: "object",
         properties: {
@@ -91,6 +92,10 @@ const TOOLS: Groq.Chat.ChatCompletionTool[] = [
           status: {
             type: "string",
             enum: [OrderStatus.ESPERANDO_PROVEEDOR, OrderStatus.PAGO_PENDIENTE],
+          },
+          requested_product: {
+            type: "string",
+            description: "Nombre exacto del producto solicitado por el cliente. Obligatorio solo cuando find_and_add_product devolvió error (producto no en catálogo) y se pasa a ESPERANDO_PROVEEDOR.",
           },
         },
         required: ["order_id", "status"],
@@ -116,7 +121,7 @@ async function executeTool(name: string, args: Record<string, unknown>) {
     case "find_and_add_product":
       return find_and_add_product(args.order_id as string, args.query as string);
     case "update_order_status":
-      return update_order_status(args.order_id as string, args.status as OrderStatus);
+      return update_order_status(args.order_id as string, args.status as OrderStatus, args.requested_product as string | undefined);
     case "rag_query_supabase":
       return rag_query_supabase(args.technical_question as string);
     default:
@@ -192,10 +197,12 @@ export async function salesAgent(
         .replace(/\(Paso\s+\d+[^)]*\)/g, "")
         .trim();
 
-      // Guardrail: if product has stock but LLM returned the JIT message, override
+      // Guardrail: if product has stock but LLM returned the JIT message, override.
+      // Skip when already_added=true (client browsing, product was already in cart).
       if (
         lastProductResult &&
         !lastProductResult.is_just_in_time &&
+        !lastProductResult.already_added &&
         (lastProductResult.stock_quantity as number) > 0 &&
         clean.startsWith("Permíteme validar")
       ) {

@@ -42,6 +42,7 @@ export async function find_and_add_product(order_id: string, query: string, quan
   if ("error" in stock) return { error: stock.error };
 
   const addResult = await add_order_item(order_id, best.id, quantity);
+  const alreadyAdded = "already_added" in addResult && addResult.already_added === true;
 
   return {
     product_id: best.id,
@@ -52,6 +53,7 @@ export async function find_and_add_product(order_id: string, query: string, quan
     is_just_in_time: stock.is_just_in_time,
     needs_restock: stock.needs_restock,
     added_to_order: "success" in addResult ? addResult.success : false,
+    already_added: alreadyAdded,
     other_results: searchResult.results.slice(1).map(r => r.name),
   };
 }
@@ -185,15 +187,17 @@ const STATUS_RANK: Record<string, number> = {
 
 export async function update_order_status(
   order_id: string,
-  status: OrderStatus
+  status: OrderStatus,
+  requested_product?: string
 ) {
   const current = await prisma.order.findUnique({ where: { id: order_id }, select: { status: true } });
   if (current && (STATUS_RANK[status] ?? 0) < (STATUS_RANK[current.status] ?? 0)) {
     return { success: false, skipped: true, reason: `Estado actual ${current.status} es más avanzado que ${status}. No se retrocede.` };
   }
-  const order = await prisma.order.update({
-    where: { id: order_id },
-    data: { status, updated_at: new Date() },
-  });
+  const data: Parameters<typeof prisma.order.update>[0]["data"] = { status, updated_at: new Date() };
+  if (requested_product) {
+    data.notes = `Cliente solicita: ${requested_product}`;
+  }
+  const order = await prisma.order.update({ where: { id: order_id }, data });
   return { success: true, order_id: order.id, new_status: order.status };
 }
