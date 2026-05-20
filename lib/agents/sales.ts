@@ -10,13 +10,11 @@ import { OrderStatus } from "@prisma/client";
 
 const SYSTEM_PROMPT = `Eres el asesor comercial de DTECNOC, empresa de tecnología e instalaciones en Perú (Trujillo).
 
-════════════════════════════════════════
 DATOS DE PAGO DE LA EMPRESA (usa siempre estos):
 - BCP: Cta. 123-456789-0-12 | CCI 002-123-004567890-12 | A nombre de: DTECNOC S.A.C.
 - Interbank: Cta. 200-3001234567 | CCI 003-200-003001234567-34 | A nombre de: DTECNOC S.A.C.
 - YAPE / PLIN / DALE: 987-654-321 (a nombre de DTECNOC S.A.C.)
 - Teléfono de ventas: 044-123-456
-════════════════════════════════════════
 
 PASO 0 — SALUDO O MENSAJE GENÉRICO:
 - Si el cliente saluda ("hola", "buenos días", etc.) o escribe algo que NO es una consulta de producto: responde con un saludo amigable y pregunta en qué puedes ayudarle. NO llames ninguna herramienta.
@@ -54,7 +52,7 @@ Cuando tengas dirección y envío definidos, comparte los datos de pago de arrib
 PASO 7 — ESTADO PAGO_PENDIENTE:
 Cuando el pedido ya está en PAGO_PENDIENTE (el cliente ya recibió los datos de pago), cualquier mensaje del cliente (incluyendo "sí", "ya pagué", "ya realicé el pago", "gracias", etc.) debe recibir esta respuesta: "¡Gracias! Hemos registrado tu aviso. El administrador verificará tu depósito y te notificaremos en breve. 😊". NO llames ninguna herramienta.
 
-════════════════════════════════════════
+
 REGLAS ABSOLUTAS — NUNCA VIOLAR:
 - NUNCA inventes precios. Cero. Si no hay precio en la BD, no hay precio.
 - NUNCA uses $ ni USD. Siempre "S/" (soles peruanos).
@@ -62,7 +60,7 @@ REGLAS ABSOLUTAS — NUNCA VIOLAR:
 - NUNCA saltes el paso de recopilación de datos del cliente.
 - NUNCA llames find_and_add_product cuando el cliente está confirmando interés en un producto ya presentado.
 - Para consultas técnicas usa rag_query_supabase.
-════════════════════════════════════════`;
+`;
 
 const TOOLS: Groq.Chat.ChatCompletionTool[] = [
   {
@@ -245,10 +243,19 @@ export async function salesAgent(
       const result = await executeTool(call.function.name, args);
       if (call.function.name === "find_and_add_product") {
         lastProductResult = result as Record<string, unknown>;
-        // Guardrail: product not in catalog → update status and return JIT message.
+        const res = result as Record<string, unknown>;
+
+        // Guardrail A: product already in cart + CONSULTANDO → client is confirming,
+        // go straight to PASO 4 instead of repeating the price.
+        if (res.already_added === true && currentStatus === OrderStatus.CONSULTANDO) {
+          const productName = res.name as string;
+          return `¡Perfecto! El ${productName} ya está en tu pedido 😊 Para continuar, necesito algunos datos:\n\n1. ¿Cuál es tu nombre completo?\n2. ¿Tu número de teléfono?\n3. ¿Tu dirección completa?\n4. ¿Un punto de referencia cercano a tu dirección?`;
+        }
+
+        // Guardrail B: product not in catalog → update status and return JIT message.
         // Only applies in early states; COTIZADO+ orders never reach this branch
         // because find_and_add_product is removed from activeTools above.
-        if ("error" in (result as Record<string, unknown>)) {
+        if ("error" in res) {
           if (!currentStatus || !postQuoteStatuses.includes(currentStatus)) {
             const query = args.query as string;
             await update_order_status(order_id, OrderStatus.ESPERANDO_PROVEEDOR, query);
