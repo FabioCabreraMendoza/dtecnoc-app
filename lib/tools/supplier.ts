@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { OrderStatus, ProductCategory } from "@prisma/client";
+import { OrderStatus } from "@prisma/client";
 
 const MARGIN_BY_CATEGORY: Record<string, number> = {
   ACCESORIO: 0.35,

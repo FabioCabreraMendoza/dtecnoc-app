@@ -20,8 +20,7 @@ export async function POST(req: NextRequest) {
     const decoded = JSON.parse(
       Buffer.from(body.message.data, "base64").toString("utf-8")
     );
-    const { emailAddress, historyId } = decoded as {
-      emailAddress: string;
+    const { historyId } = decoded as {
       historyId: string;
     };
 
