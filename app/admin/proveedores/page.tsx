@@ -34,6 +34,8 @@ export default function ProveedoresPage() {
   const [testingEmail, setTestingEmail] = useState(false);
   const [checkingReply, setCheckingReply] = useState<string | null>(null);
   const [replyStatus, setReplyStatus] = useState<Record<string, string>>({});
+  const [checkingAll, setCheckingAll] = useState(false);
+  const [checkAllStatus, setCheckAllStatus] = useState<string | null>(null);
 
   function getToken() {
     return localStorage.getItem("admin_token");
@@ -73,6 +75,29 @@ export default function ProveedoresPage() {
       setReplyStatus((prev) => ({ ...prev, [order_id]: "❌ Error de conexión" }));
     } finally {
       setCheckingReply(null);
+    }
+  }
+
+  async function checkAllReplies() {
+    setCheckingAll(true);
+    setCheckAllStatus(null);
+    try {
+      const res = await fetch("/api/cron/check-supplier-replies");
+      const data = await res.json() as { checked: number; results: Array<{ order_id: string; status: string }> };
+      const cotizados = data.results.filter((r) => r.status === "cotizado").length;
+      setCheckAllStatus(
+        cotizados > 0
+          ? `✅ ${cotizados} pedido(s) actualizados a COTIZADO`
+          : `ℹ️ ${data.checked} revisados — sin nuevas respuestas`
+      );
+      // Reload threads
+      fetch("/api/admin/threads", { headers: { Authorization: `Bearer ${getToken()}` } })
+        .then((r) => r.json())
+        .then(setThreads);
+    } catch {
+      setCheckAllStatus("❌ Error al verificar");
+    } finally {
+      setCheckingAll(false);
     }
   }
 
@@ -132,6 +157,13 @@ export default function ProveedoresPage() {
                 {testingEmail ? "Enviando..." : "📧 Probar Email"}
               </button>
               <button
+                onClick={checkAllReplies}
+                disabled={checkingAll}
+                className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50 transition-colors"
+              >
+                {checkingAll ? "Verificando..." : "🔄 Verificar todo"}
+              </button>
+              <button
                 onClick={activateGmailWatch}
                 disabled={activatingWatch}
                 className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
@@ -139,6 +171,7 @@ export default function ProveedoresPage() {
                 {activatingWatch ? "Activando..." : "🔔 Activar Gmail Watch"}
               </button>
             </div>
+            {checkAllStatus && <p className="text-xs text-right max-w-xs">{checkAllStatus}</p>}
             {testEmailStatus && <p className="text-xs text-right max-w-xs">{testEmailStatus}</p>}
             {watchStatus && <p className="text-xs text-gray-500 max-w-xs text-right">{watchStatus}</p>}
           </div>
@@ -148,7 +181,8 @@ export default function ProveedoresPage() {
       <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6 text-sm text-blue-800">
         <strong>Flujo automático:</strong> Cuando un cliente pide un producto sin stock, el sistema envía
         un correo al proveedor solicitando cotización. El proveedor <strong>responde directamente al email</strong>,
-        el agente procesa la respuesta y notifica al cliente con el precio final.
+        el sistema revisa automáticamente cada 5 minutos y notifica al cliente con el precio final.
+        Usa <strong>🔄 Verificar todo</strong> para procesar respuestas de inmediato.
       </div>
 
       {loading ? (

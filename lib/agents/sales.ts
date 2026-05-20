@@ -10,13 +10,11 @@ import { OrderStatus } from "@prisma/client";
 
 const SYSTEM_PROMPT = `Eres el asesor comercial de DTECNOC, empresa de tecnología e instalaciones en Perú (Trujillo).
 
-════════════════════════════════════════
 DATOS DE PAGO DE LA EMPRESA (usa siempre estos):
 - BCP: Cta. 123-456789-0-12 | CCI 002-123-004567890-12 | A nombre de: DTECNOC S.A.C.
 - Interbank: Cta. 200-3001234567 | CCI 003-200-003001234567-34 | A nombre de: DTECNOC S.A.C.
 - YAPE / PLIN / DALE: 987-654-321 (a nombre de DTECNOC S.A.C.)
 - Teléfono de ventas: 044-123-456
-════════════════════════════════════════
 
 PASO 0 — SALUDO O MENSAJE GENÉRICO:
 - Si el cliente saluda ("hola", "buenos días", etc.) o escribe algo que NO es una consulta de producto: responde con un saludo amigable y pregunta en qué puedes ayudarle. NO llames ninguna herramienta.
@@ -54,7 +52,7 @@ Cuando tengas dirección y envío definidos, comparte los datos de pago de arrib
 PASO 7 — ESTADO PAGO_PENDIENTE:
 Cuando el pedido ya está en PAGO_PENDIENTE (el cliente ya recibió los datos de pago), cualquier mensaje del cliente (incluyendo "sí", "ya pagué", "ya realicé el pago", "gracias", etc.) debe recibir esta respuesta: "¡Gracias! Hemos registrado tu aviso. El administrador verificará tu depósito y te notificaremos en breve. 😊". NO llames ninguna herramienta.
 
-════════════════════════════════════════
+
 REGLAS ABSOLUTAS — NUNCA VIOLAR:
 - NUNCA inventes precios. Cero. Si no hay precio en la BD, no hay precio.
 - NUNCA uses $ ni USD. Siempre "S/" (soles peruanos).
@@ -62,7 +60,7 @@ REGLAS ABSOLUTAS — NUNCA VIOLAR:
 - NUNCA saltes el paso de recopilación de datos del cliente.
 - NUNCA llames find_and_add_product cuando el cliente está confirmando interés en un producto ya presentado.
 - Para consultas técnicas usa rag_query_supabase.
-════════════════════════════════════════`;
+`;
 
 const TOOLS: Groq.Chat.ChatCompletionTool[] = [
   {
@@ -160,13 +158,23 @@ export async function salesAgent(
   let currentModel = GROQ_MODEL_SALES;
   let lastProductResult: Record<string, unknown> | null = null;
 
+  const currentStatus = "error" in orderCtx ? null : (orderCtx as { status: string }).status;
+  // Post-quote states: find_and_add_product is irrelevant and causes confusion
+  const postQuoteStatuses = [
+    OrderStatus.COTIZADO, OrderStatus.PAGO_PENDIENTE,
+    OrderStatus.PAGO_CONFIRMADO, OrderStatus.EN_RUTA, OrderStatus.COMPLETADO,
+  ] as string[];
+  const activeTools = postQuoteStatuses.includes(currentStatus ?? "")
+    ? TOOLS.filter((t) => t.function?.name !== "find_and_add_product")
+    : TOOLS;
+
   for (let i = 0; i < 5; i++) {
     let completion: Awaited<ReturnType<typeof groq.chat.completions.create>>;
     try {
       completion = await groq.chat.completions.create({
         model: currentModel,
         messages,
-        tools: TOOLS,
+        tools: activeTools,
         tool_choice: "auto",
         temperature: 0.3,
         max_tokens: 400,
@@ -179,7 +187,7 @@ export async function salesAgent(
         completion = await groq.chat.completions.create({
           model: currentModel,
           messages,
-          tools: TOOLS,
+          tools: activeTools,
           tool_choice: "auto",
           temperature: 0.3,
           max_tokens: 400,
@@ -197,6 +205,11 @@ export async function salesAgent(
         .replace(/\(Paso\s+\d+[^)]*\)/g, "")
         .trim();
 
+      // Guardrail: LLM must never invent a price for a JIT product.
+      if (lastProductResult && lastProductResult.is_just_in_time === true && !lastProductResult.already_added) {
+        return "Permíteme validar disponibilidad con nuestro proveedor, te confirmo en breve 😊";
+      }
+
       // Guardrail: if product has stock but LLM returned the JIT message, override.
       // Skip when already_added=true (client browsing, product was already in cart).
       if (
@@ -210,6 +223,15 @@ export async function salesAgent(
           ? `S/ ${lastProductResult.selling_price}`
           : "precio a consultar";
         clean = `Tenemos el producto "${lastProductResult.name}" disponible en stock (${lastProductResult.stock_quantity} unidades). El precio es ${price}. ¿Te interesa adquirirlo? 😊`;
+      }
+
+      // Guardrail: agent shared payment data but forgot to call update_order_status(PAGO_PENDIENTE).
+      // Detect payment info keywords in the response and move the order automatically.
+      if (
+        currentStatus === OrderStatus.COTIZADO &&
+        (clean.includes("BCP") || clean.includes("Interbank") || clean.includes("YAPE"))
+      ) {
+        await update_order_status(order_id, OrderStatus.PAGO_PENDIENTE);
       }
 
       return clean || "¡Hola! ¿En qué puedo ayudarte hoy? 😊";
@@ -226,12 +248,24 @@ export async function salesAgent(
       const result = await executeTool(call.function.name, args);
       if (call.function.name === "find_and_add_product") {
         lastProductResult = result as Record<string, unknown>;
-        // Guardrail: product not in catalog → update status and return JIT message immediately.
-        // Don't let the LLM invent a "no tenemos ese producto" response.
-        if ("error" in (result as Record<string, unknown>)) {
-          const query = args.query as string;
-          await update_order_status(order_id, OrderStatus.ESPERANDO_PROVEEDOR, query);
-          return "Permíteme validar disponibilidad con nuestro proveedor, te confirmo en breve 😊";
+        const res = result as Record<string, unknown>;
+
+        // Guardrail A: product already in cart + CONSULTANDO → client is confirming,
+        // go straight to PASO 4 instead of repeating the price.
+        if (res.already_added === true && currentStatus === OrderStatus.CONSULTANDO) {
+          const productName = res.name as string;
+          return `¡Perfecto! El ${productName} ya está en tu pedido 😊 Para continuar, necesito algunos datos:\n\n1. ¿Cuál es tu nombre completo?\n2. ¿Tu número de teléfono?\n3. ¿Tu dirección completa?\n4. ¿Un punto de referencia cercano a tu dirección?`;
+        }
+
+        // Guardrail B: product not in catalog → update status and return JIT message.
+        // Only applies in early states; COTIZADO+ orders never reach this branch
+        // because find_and_add_product is removed from activeTools above.
+        if ("error" in res) {
+          if (!currentStatus || !postQuoteStatuses.includes(currentStatus)) {
+            const query = args.query as string;
+            await update_order_status(order_id, OrderStatus.ESPERANDO_PROVEEDOR, query);
+            return "Permíteme validar disponibilidad con nuestro proveedor, te confirmo en breve 😊";
+          }
         }
       }
       messages.push({

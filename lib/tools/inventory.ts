@@ -31,6 +31,15 @@ export async function check_product_availability(product_id: string) {
   return read_db_stock(product_id);
 }
 
+// Brand names whose SYNONYMS entry maps them to a generic category.
+// When the query contains one of these, the top search result MUST contain
+// that brand name in its product name — otherwise it's a different brand.
+const BRAND_WORDS = new Set([
+  "iphone", "samsung", "xiaomi", "huawei", "motorola", "nokia", "lg",
+  "oppo", "vivo", "realme", "pixel", "oneplus", "asus", "lenovo",
+  "directv", "starlink",
+]);
+
 export async function find_and_add_product(order_id: string, query: string, quantity = 1) {
   const searchResult = await search_products(query);
   if (!("results" in searchResult) || searchResult.results.length === 0) {
@@ -38,6 +47,21 @@ export async function find_and_add_product(order_id: string, query: string, quan
   }
 
   const best = searchResult.results[0];
+
+  // Relevance check: if the query contains a specific brand word (e.g. "iphone")
+  // verify the best result's name actually contains that brand.
+  // Without this, "iphone 15" would match Samsung via the "smartphone" synonym.
+  const norm = (s: string) =>
+    s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9\s]/g, "");
+  const queryWords = norm(query).split(/\s+/).filter(w => w.length >= 3);
+  const brandWordsInQuery = queryWords.filter(w => BRAND_WORDS.has(w));
+  if (brandWordsInQuery.length > 0) {
+    const bestNorm = norm(best.name);
+    const hasMatch = brandWordsInQuery.some(w => bestNorm.includes(w));
+    if (!hasMatch) {
+      return { error: "Producto no encontrado en el catálogo.", query };
+    }
+  }
   const stock = await read_db_stock(best.id);
   if ("error" in stock) return { error: stock.error };
 

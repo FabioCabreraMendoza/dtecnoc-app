@@ -49,13 +49,21 @@ export async function supplierAgent(
 
   if (!chat) return { order_now_cotizado: false, followup_sent: false };
 
-  const product = chat.order.items[0]?.product;
+  // Prefer the explicitly requested product (stored in notes) over the catalog item.
+  // This handles out-of-catalog products (e.g. "Cliente solicita: iPhone 15").
+  const requestedProductMatch = chat.order.notes?.match(/Cliente solicita:\s*([^|]+)/);
+  const requestedProductName = requestedProductMatch?.[1]?.trim() ?? null;
+
+  const product = chat.order.items[0]?.product ?? null;
+  const effectiveProductName = requestedProductName ?? product?.name ?? null;
+  const effectiveCategory = String(product?.category ?? "SMARTPHONE");
+
   const history = (chat.messages_json as Array<Record<string, string>>) ?? [];
 
   const costPrice = extractPrice(supplier_email_body);
-  console.log(`[supplierAgent] order=${order_id} raw="${supplier_email_body}" → cost=${costPrice}`);
+  console.log(`[supplierAgent] order=${order_id} raw="${supplier_email_body}" → cost=${costPrice} product="${effectiveProductName}"`);
 
-  if (!costPrice || !product) {
+  if (!costPrice || !effectiveProductName) {
     await prisma.supplierChat.update({
       where: { order_id },
       data: {
@@ -81,7 +89,7 @@ export async function supplierAgent(
 
   // Try to detect the supplier's offered product name:
   // first non-price line that looks like a product (not a date/logistics phrase)
-  const LOGISTICS_RE = /^(recoj|agencia|courier|d[ií]as?|entrega|llega|stock|shalom|marvisur|viernes|lunes|martes|miércoles|jueves|sábado|domingo)/i;
+  const LOGISTICS_RE = /^(disponible|recoj|agencia|courier|d[ií]as?|entrega|llega|stock|shalom|marvisur|viernes|lunes|martes|miércoles|jueves|sábado|domingo)/i;
   const supplierProductLine = noteLines.find(
     l => l.length > 5 && !LOGISTICS_RE.test(l)
   ) ?? null;
@@ -90,14 +98,16 @@ export async function supplierAgent(
   const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, " ").replace(/\s+/g, " ").trim();
   const isAlternative =
     supplierProductLine !== null &&
-    normalize(supplierProductLine) !== normalize(product.name) &&
-    !normalize(supplierProductLine).includes(normalize(product.name).split(" ").slice(0, 2).join(" "));
+    normalize(supplierProductLine) !== normalize(effectiveProductName) &&
+    !normalize(supplierProductLine).includes(normalize(effectiveProductName).split(" ").slice(0, 2).join(" "));
 
-  // 1. Save cost price
-  await update_cost_price_in_db(product.id, costPrice);
+  // 1. Save cost price (only when catalog product exists)
+  if (product) {
+    await update_cost_price_in_db(product.id, costPrice);
+  }
 
   // 2. Calculate selling price with margin
-  const { final_price } = await calculate_final_margin(costPrice, product.category);
+  const { final_price } = await calculate_final_margin(costPrice, effectiveCategory);
 
   // 3. Update order to COTIZADO and save supplier note
   const fullNote = [
@@ -111,14 +121,14 @@ export async function supplierAgent(
       data: { notes: `Proveedor: ${fullNote}`, updated_at: new Date() },
     });
   }
-  const notifyResult = await notify_client_price(order_id, final_price, product.name);
+  const notifyResult = await notify_client_price(order_id, final_price, effectiveProductName);
 
   // Build client message — distinguish between exact match and alternative model
   let client_message: string;
   if (isAlternative && supplierProductLine) {
     const deliveryLines = noteLines.filter(l => LOGISTICS_RE.test(l));
     const deliveryInfo = deliveryLines.length > 0 ? ` El proveedor indica: "${deliveryLines.join(" | ")}"` : "";
-    client_message = `Hemos consultado con nuestro proveedor. El modelo exacto que solicitaste (${product.name}) no está disponible actualmente, pero nos ofrecen como alternativa el **${supplierProductLine}** al precio de S/ ${final_price}.${deliveryInfo} ¿Te interesa esta opción? 😊`;
+    client_message = `Hemos consultado con nuestro proveedor. El modelo exacto que solicitaste (${effectiveProductName}) no está disponible actualmente, pero nos ofrecen como alternativa el **${supplierProductLine}** al precio de S/ ${final_price}.${deliveryInfo} ¿Te interesa esta opción? 😊`;
   } else {
     client_message = notifyResult.message_to_client as string;
   }
