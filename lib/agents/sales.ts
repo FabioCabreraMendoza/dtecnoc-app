@@ -205,6 +205,11 @@ export async function salesAgent(
         .replace(/\(Paso\s+\d+[^)]*\)/g, "")
         .trim();
 
+      // Guardrail: LLM must never invent a price for a JIT product.
+      if (lastProductResult && lastProductResult.is_just_in_time === true && !lastProductResult.already_added) {
+        return "Permíteme validar disponibilidad con nuestro proveedor, te confirmo en breve 😊";
+      }
+
       // Guardrail: if product has stock but LLM returned the JIT message, override.
       // Skip when already_added=true (client browsing, product was already in cart).
       if (
