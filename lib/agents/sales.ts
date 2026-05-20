@@ -160,13 +160,23 @@ export async function salesAgent(
   let currentModel = GROQ_MODEL_SALES;
   let lastProductResult: Record<string, unknown> | null = null;
 
+  const currentStatus = "error" in orderCtx ? null : (orderCtx as { status: string }).status;
+  // Post-quote states: find_and_add_product is irrelevant and causes confusion
+  const postQuoteStatuses = [
+    OrderStatus.COTIZADO, OrderStatus.PAGO_PENDIENTE,
+    OrderStatus.PAGO_CONFIRMADO, OrderStatus.EN_RUTA, OrderStatus.COMPLETADO,
+  ] as string[];
+  const activeTools = postQuoteStatuses.includes(currentStatus ?? "")
+    ? TOOLS.filter((t) => t.function?.name !== "find_and_add_product")
+    : TOOLS;
+
   for (let i = 0; i < 5; i++) {
     let completion: Awaited<ReturnType<typeof groq.chat.completions.create>>;
     try {
       completion = await groq.chat.completions.create({
         model: currentModel,
         messages,
-        tools: TOOLS,
+        tools: activeTools,
         tool_choice: "auto",
         temperature: 0.3,
         max_tokens: 400,
@@ -179,7 +189,7 @@ export async function salesAgent(
         completion = await groq.chat.completions.create({
           model: currentModel,
           messages,
-          tools: TOOLS,
+          tools: activeTools,
           tool_choice: "auto",
           temperature: 0.3,
           max_tokens: 400,
@@ -226,12 +236,15 @@ export async function salesAgent(
       const result = await executeTool(call.function.name, args);
       if (call.function.name === "find_and_add_product") {
         lastProductResult = result as Record<string, unknown>;
-        // Guardrail: product not in catalog → update status and return JIT message immediately.
-        // Don't let the LLM invent a "no tenemos ese producto" response.
+        // Guardrail: product not in catalog → update status and return JIT message.
+        // Only applies in early states; COTIZADO+ orders never reach this branch
+        // because find_and_add_product is removed from activeTools above.
         if ("error" in (result as Record<string, unknown>)) {
-          const query = args.query as string;
-          await update_order_status(order_id, OrderStatus.ESPERANDO_PROVEEDOR, query);
-          return "Permíteme validar disponibilidad con nuestro proveedor, te confirmo en breve 😊";
+          if (!currentStatus || !postQuoteStatuses.includes(currentStatus)) {
+            const query = args.query as string;
+            await update_order_status(order_id, OrderStatus.ESPERANDO_PROVEEDOR, query);
+            return "Permíteme validar disponibilidad con nuestro proveedor, te confirmo en breve 😊";
+          }
         }
       }
       messages.push({
