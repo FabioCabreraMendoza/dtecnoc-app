@@ -150,6 +150,12 @@ export async function POST(req: NextRequest) {
         const invResult = await inventoryAgent(order_id, product_id);
         inventoryAction = invResult.action;
         console.log(`[inventory] action=${inventoryAction}`, invResult.gmail_thread_id ?? "");
+      } else if (updatedOrder?.status === OrderStatus.ESPERANDO_PROVEEDOR) {
+        // No catalog product added — custom product stored in order notes
+        console.log(`[inventory] no items but ESPERANDO_PROVEEDOR, checking order notes`);
+        const invResult = await inventoryAgent(order_id, null);
+        inventoryAction = invResult.action;
+        console.log(`[inventory] action=${inventoryAction}`, invResult.gmail_thread_id ?? "");
       } else {
         console.log(`[inventory] no items on order ${order_id}, skipping`);
       }

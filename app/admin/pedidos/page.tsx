@@ -132,6 +132,9 @@ export default function PedidosPage() {
               <div className="space-y-2 mt-2 min-h-16">
                 {cols.map((order) => {
                   const actions = STATUS_ACTIONS[order.status] ?? [];
+                  const requestedProduct = order.notes?.match(/Cliente solicita:\s*([^|]+)/)?.[1]?.trim();
+                  const displayProduct = requestedProduct ?? order.items[0]?.product.name ?? "Sin producto";
+                  const displayNotes = order.notes?.replace(/Cliente solicita:[^|]*\|?\s*/g, "").trim() || null;
                   return (
                     <div
                       key={order.id}
@@ -141,17 +144,23 @@ export default function PedidosPage() {
                         {order.client.name}
                       </div>
                       <div className="text-xs text-gray-500 mt-0.5 truncate">
-                        {order.items[0]?.product.name ?? "Sin producto"}
+                        {displayProduct}
                       </div>
-                      {order.status === "ESPERANDO_PROVEEDOR" && order.items[0] && (
+                      {order.status === "ESPERANDO_PROVEEDOR" && (
                         <div className="mt-1 space-y-0.5">
-                          <div className="text-xs text-gray-400">
-                            📦 {order.items[0].product.category}
-                          </div>
-                          {order.items[0].product.selling_price && (
-                            <div className="text-xs text-blue-500">
-                              Precio ref.: S/ {order.items[0].product.selling_price}
-                            </div>
+                          {requestedProduct ? (
+                            <div className="text-xs text-yellow-600">📦 Producto bajo pedido</div>
+                          ) : order.items[0] && (
+                            <>
+                              <div className="text-xs text-gray-400">
+                                📦 {order.items[0].product.category}
+                              </div>
+                              {order.items[0].product.selling_price && (
+                                <div className="text-xs text-blue-500">
+                                  Precio ref.: S/ {order.items[0].product.selling_price}
+                                </div>
+                              )}
+                            </>
                           )}
                         </div>
                       )}
@@ -160,10 +169,10 @@ export default function PedidosPage() {
                           S/ {order.total_price}
                         </div>
                       )}
-                      {order.notes && (
+                      {displayNotes && (
                         <div className="flex items-start gap-1 mt-1">
-                          <div className="text-xs text-gray-400 truncate flex-1" title={order.notes}>
-                            📝 {order.notes}
+                          <div className="text-xs text-gray-400 truncate flex-1" title={displayNotes}>
+                            📝 {displayNotes}
                           </div>
                           <button
                             onClick={async () => {
@@ -181,7 +190,7 @@ export default function PedidosPage() {
                           </button>
                         </div>
                       )}
-                      {order.status === "ESPERANDO_PROVEEDOR" && order.items.length > 0 && !order.total_price && (
+                      {order.status === "ESPERANDO_PROVEEDOR" && !order.total_price && (!!requestedProduct || order.items.length > 0) && (
                         <div className="mt-2">
                           {quotingOrder === order.id ? (
                             <div className="flex flex-col gap-1">
