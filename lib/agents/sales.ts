@@ -222,6 +222,15 @@ export async function salesAgent(
         clean = `Tenemos el producto "${lastProductResult.name}" disponible en stock (${lastProductResult.stock_quantity} unidades). El precio es ${price}. ¿Te interesa adquirirlo? 😊`;
       }
 
+      // Guardrail: agent shared payment data but forgot to call update_order_status(PAGO_PENDIENTE).
+      // Detect payment info keywords in the response and move the order automatically.
+      if (
+        currentStatus === OrderStatus.COTIZADO &&
+        (clean.includes("BCP") || clean.includes("Interbank") || clean.includes("YAPE"))
+      ) {
+        await update_order_status(order_id, OrderStatus.PAGO_PENDIENTE);
+      }
+
       return clean || "¡Hola! ¿En qué puedo ayudarte hoy? 😊";
     }
 
