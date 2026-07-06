@@ -1,10 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ["@prisma/client", "bcryptjs", "@xenova/transformers"],
-  experimental: {
-    optimizePackageImports: ["groq-sdk"],
-  },
+  // Paquetes que deben ejecutarse en Node y no ser bundleados por el server de Next.
+  serverExternalPackages: ["@prisma/client", "bcryptjs", "pg"],
   turbopack: {},
 };
 

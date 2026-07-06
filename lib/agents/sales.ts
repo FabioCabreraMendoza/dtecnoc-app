@@ -1,13 +1,29 @@
-import Groq from "groq-sdk";
-import { groq, GROQ_MODEL, GROQ_MODEL_SALES } from "@/lib/groq";
 import {
-  find_and_add_product,
-  update_order_status,
-  get_order_status,
-} from "@/lib/tools/inventory";
-import { rag_query_supabase } from "@/lib/tools/rag";
+  StateGraph,
+  Annotation,
+  MessagesAnnotation,
+  START,
+  END,
+  type BaseCheckpointSaver,
+} from "@langchain/langgraph";
+import {
+  SystemMessage,
+  HumanMessage,
+  AIMessage,
+  ToolMessage,
+  type BaseMessage,
+} from "@langchain/core/messages";
+import { makeChat, GROQ_MODEL, GROQ_MODEL_SALES } from "@/lib/llm";
+import {
+  findAndAddProductTool,
+  updateOrderStatusTool,
+} from "@/lib/tools/lc/inventory-tools";
+import { ragQueryTool } from "@/lib/tools/lc/rag-tool";
+import { update_order_status, get_order_status } from "@/lib/tools/inventory";
+import type { StructuredToolInterface } from "@langchain/core/tools";
 import { OrderStatus } from "@prisma/client";
 
+// ── Prompt de sistema (§3.5 — instrucciones del nodo agente) ─────────────────
 const SYSTEM_PROMPT = `Eres el asesor comercial de DTECNOC, empresa de tecnología e instalaciones en Perú (Trujillo).
 
 DATOS DE PAGO DE LA EMPRESA (usa siempre estos):
@@ -62,73 +78,223 @@ REGLAS ABSOLUTAS — NUNCA VIOLAR:
 - Para consultas técnicas usa rag_query_supabase.
 `;
 
-const TOOLS: Groq.Chat.ChatCompletionTool[] = [
-  {
-    type: "function",
-    function: {
-      name: "find_and_add_product",
-      description: "Busca un producto por nombre, verifica su disponibilidad y lo agrega al pedido. Usar siempre que el cliente pregunte por un producto.",
-      parameters: {
-        type: "object",
-        properties: {
-          order_id: { type: "string", description: "ID del pedido actual" },
-          query: { type: "string", description: "Nombre o descripción del producto que busca el cliente" },
-        },
-        required: ["order_id", "query"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "update_order_status",
-      description: "Actualiza el estado del pedido. Solo usa: ESPERANDO_PROVEEDOR (producto sin stock o no en catálogo) o PAGO_PENDIENTE (cliente listo para pagar, datos completos).",
-      parameters: {
-        type: "object",
-        properties: {
-          order_id: { type: "string" },
-          status: {
-            type: "string",
-            enum: [OrderStatus.ESPERANDO_PROVEEDOR, OrderStatus.PAGO_PENDIENTE],
-          },
-          requested_product: {
-            type: "string",
-            description: "Nombre exacto del producto solicitado por el cliente. Obligatorio solo cuando find_and_add_product devolvió error (producto no en catálogo) y se pasa a ESPERANDO_PROVEEDOR.",
-          },
-        },
-        required: ["order_id", "status"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "rag_query_supabase",
-      description: "Consulta la base de conocimiento técnico de DTECNOC para responder dudas técnicas",
-      parameters: {
-        type: "object",
-        properties: { technical_question: { type: "string" } },
-        required: ["technical_question"],
-      },
-    },
-  },
-];
+const JIT_MESSAGE =
+  "Permíteme validar disponibilidad con nuestro proveedor, te confirmo en breve 😊";
 
-async function executeTool(name: string, args: Record<string, unknown>) {
-  switch (name) {
-    case "find_and_add_product":
-      return find_and_add_product(args.order_id as string, args.query as string);
-    case "update_order_status":
-      return update_order_status(args.order_id as string, args.status as OrderStatus, args.requested_product as string | undefined);
-    case "rag_query_supabase":
-      return rag_query_supabase(args.technical_question as string);
-    default:
-      return { error: "Tool not found" };
-  }
+// Estados posteriores a la cotización: find_and_add_product es irrelevante.
+const POST_QUOTE_STATUSES = [
+  OrderStatus.COTIZADO,
+  OrderStatus.PAGO_PENDIENTE,
+  OrderStatus.PAGO_CONFIRMADO,
+  OrderStatus.EN_RUTA,
+  OrderStatus.COMPLETADO,
+] as string[];
+
+const ALL_TOOLS: StructuredToolInterface[] = [
+  findAndAddProductTool,
+  updateOrderStatusTool,
+  ragQueryTool,
+];
+const TOOL_MAP: Record<string, StructuredToolInterface> = Object.fromEntries(
+  ALL_TOOLS.map((t) => [t.name, t])
+);
+
+// ── Estado compartido del grafo (§3.5 — TypedDict/Annotation) ────────────────
+const SalesState = Annotation.Root({
+  ...MessagesAnnotation.spec,
+  order_id: Annotation<string>,
+  order_status: Annotation<string>({
+    reducer: (_p, n) => n,
+    default: () => "",
+  }),
+  last_product_result: Annotation<Record<string, unknown> | null>({
+    reducer: (_p, n) => n,
+    default: () => null,
+  }),
+  final_response: Annotation<string | null>({
+    reducer: (_p, n) => n,
+    default: () => null,
+  }),
+});
+type SalesStateT = typeof SalesState.State;
+
+// ── Nodo: agente (llama al LLM con tools) ────────────────────────────────────
+async function agentNode(state: SalesStateT): Promise<Partial<SalesStateT>> {
+  const orderCtx = await get_order_status(state.order_id);
+  const status =
+    "error" in orderCtx ? state.order_status : (orderCtx as { status: string }).status;
+  const orderInfo =
+    "error" in orderCtx ? "" : `\nEstado del pedido: ${JSON.stringify(orderCtx)}`;
+
+  // Herramientas activas según el estado (§3.1 — ramificación por estado).
+  const activeTools = POST_QUOTE_STATUSES.includes(status)
+    ? ALL_TOOLS.filter((t) => t.name !== "find_and_add_product")
+    : ALL_TOOLS;
+
+  // Modelo 70b con fallback automático al 8b (§3.8), tools ligadas.
+  const primary = makeChat(GROQ_MODEL_SALES, { temperature: 0.3, maxTokens: 400 }).bindTools(
+    activeTools
+  );
+  const fallback = makeChat(GROQ_MODEL, { temperature: 0.3, maxTokens: 400 }).bindTools(
+    activeTools
+  );
+  const model = primary.withFallbacks([fallback]);
+
+  const promptMessages: BaseMessage[] = [
+    new SystemMessage(SYSTEM_PROMPT),
+    new SystemMessage(`Contexto actual:${orderInfo}\nOrder ID: ${state.order_id}`),
+    ...state.messages,
+  ];
+
+  const response = await model.invoke(promptMessages);
+  return { messages: [response], order_status: status };
 }
 
-const GREETING_RE = /^(hola+|buenas?|buenos?\s+(d[ií]as?|tardes?|noches?)|hey|saludos?|hi|hello|qu[eé]\s+tal|como\s+est[aá]s?|ola|buen\s+d[ií]a)\W*$/i;
+// ── Nodo: ejecución de herramientas + guardrails deterministas ───────────────
+async function toolsNode(state: SalesStateT): Promise<Partial<SalesStateT>> {
+  const lastMsg = state.messages[state.messages.length - 1] as AIMessage;
+  const toolMessages: ToolMessage[] = [];
+  let lastProductResult = state.last_product_result;
 
+  for (const call of lastMsg.tool_calls ?? []) {
+    const tool = TOOL_MAP[call.name];
+    const rawOutput = tool
+      ? ((await tool.invoke(call.args)) as string)
+      : JSON.stringify({ error: "Tool not found" });
+
+    const toolMsg = new ToolMessage({
+      content: rawOutput,
+      tool_call_id: call.id ?? call.name,
+    });
+
+    if (call.name === "find_and_add_product") {
+      const res = JSON.parse(rawOutput) as Record<string, unknown>;
+      lastProductResult = res;
+
+      // Guardrail A: producto ya en el carrito + CONSULTANDO → el cliente confirma,
+      // salta directo al PASO 4 en vez de repetir el precio.
+      if (res.already_added === true && state.order_status === OrderStatus.CONSULTANDO) {
+        const productName = res.name as string;
+        return {
+          messages: [toolMsg],
+          last_product_result: res,
+          final_response: `¡Perfecto! El ${productName} ya está en tu pedido 😊 Para continuar, necesito algunos datos:\n\n1. ¿Cuál es tu nombre completo?\n2. ¿Tu número de teléfono?\n3. ¿Tu dirección completa?\n4. ¿Un punto de referencia cercano a tu dirección?`,
+        };
+      }
+
+      // Guardrail B: producto fuera de catálogo → ESPERANDO_PROVEEDOR + mensaje JIT.
+      if ("error" in res && !POST_QUOTE_STATUSES.includes(state.order_status)) {
+        const query = call.args.query as string;
+        await update_order_status(state.order_id, OrderStatus.ESPERANDO_PROVEEDOR, query);
+        return {
+          messages: [toolMsg],
+          last_product_result: res,
+          final_response: JIT_MESSAGE,
+        };
+      }
+    }
+
+    toolMessages.push(toolMsg);
+  }
+
+  return { messages: toolMessages, last_product_result: lastProductResult };
+}
+
+// ── Nodo: finalización (limpieza + guardrails de precio/pago) ────────────────
+async function finalizeNode(state: SalesStateT): Promise<Partial<SalesStateT>> {
+  const lastAI = [...state.messages]
+    .reverse()
+    .find((m): m is AIMessage => m instanceof AIMessage);
+  const raw =
+    (typeof lastAI?.content === "string" ? lastAI.content : "") ||
+    "¡Hola! ¿En qué puedo ayudarte hoy? 😊";
+
+  let clean = raw
+    .replace(/<function[^>]*>[\s\S]*?<\/function>/g, "")
+    .replace(/\(Paso\s+\d+[^)]*\)/g, "")
+    .trim();
+
+  const lpr = state.last_product_result;
+
+  // Guardrail: el LLM nunca debe inventar precio para un producto JIT.
+  if (lpr && lpr.is_just_in_time === true && !lpr.already_added) {
+    return { final_response: JIT_MESSAGE };
+  }
+
+  // Guardrail: si hay stock pero el LLM soltó el mensaje JIT, sobrescribe con el precio.
+  if (
+    lpr &&
+    !lpr.is_just_in_time &&
+    !lpr.already_added &&
+    (lpr.stock_quantity as number) > 0 &&
+    clean.startsWith("Permíteme validar")
+  ) {
+    const price = lpr.selling_price ? `S/ ${lpr.selling_price}` : "precio a consultar";
+    clean = `Tenemos el producto "${lpr.name}" disponible en stock (${lpr.stock_quantity} unidades). El precio es ${price}. ¿Te interesa adquirirlo? 😊`;
+  }
+
+  // Guardrail: compartió datos de pago pero olvidó mover el estado → PAGO_PENDIENTE.
+  if (
+    state.order_status === OrderStatus.COTIZADO &&
+    (clean.includes("BCP") || clean.includes("Interbank") || clean.includes("YAPE"))
+  ) {
+    await update_order_status(state.order_id, OrderStatus.PAGO_PENDIENTE);
+  }
+
+  return { final_response: clean || "¡Hola! ¿En qué puedo ayudarte hoy? 😊" };
+}
+
+// ── Aristas condicionales (§3.5) ─────────────────────────────────────────────
+function routeFromAgent(state: SalesStateT): "tools" | "finalize" {
+  const lastMsg = state.messages[state.messages.length - 1] as AIMessage;
+  return (lastMsg.tool_calls?.length ?? 0) > 0 ? "tools" : "finalize";
+}
+
+function routeFromTools(state: SalesStateT): typeof END | "agent" {
+  // Un guardrail cortocircuitó con una respuesta final → terminar.
+  return state.final_response != null ? END : "agent";
+}
+
+// ── Construcción del grafo ───────────────────────────────────────────────────
+export function buildSalesGraph(checkpointer?: BaseCheckpointSaver) {
+  const graph = new StateGraph(SalesState)
+    .addNode("agent", agentNode)
+    .addNode("tools", toolsNode)
+    .addNode("finalize", finalizeNode)
+    .addEdge(START, "agent")
+    .addConditionalEdges("agent", routeFromAgent, {
+      tools: "tools",
+      finalize: "finalize",
+    })
+    .addConditionalEdges("tools", routeFromTools, {
+      agent: "agent",
+      [END]: END,
+    })
+    .addEdge("finalize", END);
+
+  return graph.compile({ checkpointer });
+}
+
+// Checkpointing (§3.5): el grafo de runtime es stateless — la memoria durable de
+// la conversación proviene de ClientConversation (BD), que se reconstruye e inyecta
+// como historial en cada turno. Para un despliegue con memoria gestionada por el
+// grafo (LangGraph Platform / multiusuario) se compila con un checkpointer durable:
+//   buildSalesGraph(PostgresSaver.fromConnString(process.env.DATABASE_URL!))
+// y se invoca pasando solo el mensaje nuevo con { configurable: { thread_id } }.
+// MemorySaver queda disponible para pruebas locales de reanudación.
+const salesGraph = buildSalesGraph();
+
+const GREETING_RE =
+  /^(hola+|buenas?|buenos?\s+(d[ií]as?|tardes?|noches?)|hey|saludos?|hi|hello|qu[eé]\s+tal|como\s+est[aá]s?|ola|buen\s+d[ií]a)\W*$/i;
+
+function toLcMessage(m: { role: "user" | "assistant"; content: string }): BaseMessage {
+  return m.role === "user" ? new HumanMessage(m.content) : new AIMessage(m.content);
+}
+
+/**
+ * Punto de entrada público — misma firma que la versión original.
+ * Orquesta el flujo de ventas mediante el grafo LangGraph.
+ */
 export async function salesAgent(
   message: string,
   order_id: string,
@@ -138,143 +304,18 @@ export async function salesAgent(
     return "¡Hola! 😊 ¿En qué puedo ayudarte hoy? Ofrecemos smartphones, tablets, cámaras de seguridad, antenas Starlink, kits DirecTV, paneles solares y accesorios.";
   }
 
-  const orderCtx = await get_order_status(order_id);
-  const orderInfo =
-    "error" in orderCtx ? "" : `\nEstado del pedido: ${JSON.stringify(orderCtx)}`;
-
-  const historyMessages: Groq.Chat.ChatCompletionMessageParam[] = history
-    .slice(-6)
-    .map((m) => ({ role: m.role, content: m.content }));
-
-  const messages: Groq.Chat.ChatCompletionMessageParam[] = [
-    { role: "system", content: SYSTEM_PROMPT },
-    ...historyMessages,
-    {
-      role: "user",
-      content: `Mensaje del cliente: "${message}"${orderInfo}\nOrder ID: ${order_id}`,
-    },
+  const initialMessages: BaseMessage[] = [
+    ...history.slice(-6).map(toLcMessage),
+    new HumanMessage(message),
   ];
 
-  let currentModel = GROQ_MODEL_SALES;
-  let lastProductResult: Record<string, unknown> | null = null;
+  const result = await salesGraph.invoke(
+    { messages: initialMessages, order_id, order_status: "", last_product_result: null },
+    { recursionLimit: 12, configurable: { thread_id: order_id } }
+  );
 
-  const currentStatus = "error" in orderCtx ? null : (orderCtx as { status: string }).status;
-  // Post-quote states: find_and_add_product is irrelevant and causes confusion
-  const postQuoteStatuses = [
-    OrderStatus.COTIZADO, OrderStatus.PAGO_PENDIENTE,
-    OrderStatus.PAGO_CONFIRMADO, OrderStatus.EN_RUTA, OrderStatus.COMPLETADO,
-  ] as string[];
-  const activeTools = postQuoteStatuses.includes(currentStatus ?? "")
-    ? TOOLS.filter((t) => t.function?.name !== "find_and_add_product")
-    : TOOLS;
-
-  for (let i = 0; i < 5; i++) {
-    let completion: Awaited<ReturnType<typeof groq.chat.completions.create>>;
-    try {
-      completion = await groq.chat.completions.create({
-        model: currentModel,
-        messages,
-        tools: activeTools,
-        tool_choice: "auto",
-        temperature: 0.3,
-        max_tokens: 400,
-      });
-    } catch (err: unknown) {
-      const status = (err as { status?: number }).status;
-      if (status === 429 && currentModel === GROQ_MODEL_SALES) {
-        console.warn("[salesAgent] 70b rate limited, falling back to 8b");
-        currentModel = GROQ_MODEL;
-        completion = await groq.chat.completions.create({
-          model: currentModel,
-          messages,
-          tools: activeTools,
-          tool_choice: "auto",
-          temperature: 0.3,
-          max_tokens: 400,
-        });
-      } else {
-        throw err;
-      }
-    }
-
-    const choice = completion.choices[0];
-    if (choice.finish_reason === "stop" || !choice.message.tool_calls?.length) {
-      const raw = choice.message.content ?? "¡Hola! ¿En qué puedo ayudarte hoy? 😊";
-      let clean = raw
-        .replace(/<function[^>]*>[\s\S]*?<\/function>/g, "")
-        .replace(/\(Paso\s+\d+[^)]*\)/g, "")
-        .trim();
-
-      // Guardrail: LLM must never invent a price for a JIT product.
-      if (lastProductResult && lastProductResult.is_just_in_time === true && !lastProductResult.already_added) {
-        return "Permíteme validar disponibilidad con nuestro proveedor, te confirmo en breve 😊";
-      }
-
-      // Guardrail: if product has stock but LLM returned the JIT message, override.
-      // Skip when already_added=true (client browsing, product was already in cart).
-      if (
-        lastProductResult &&
-        !lastProductResult.is_just_in_time &&
-        !lastProductResult.already_added &&
-        (lastProductResult.stock_quantity as number) > 0 &&
-        clean.startsWith("Permíteme validar")
-      ) {
-        const price = lastProductResult.selling_price
-          ? `S/ ${lastProductResult.selling_price}`
-          : "precio a consultar";
-        clean = `Tenemos el producto "${lastProductResult.name}" disponible en stock (${lastProductResult.stock_quantity} unidades). El precio es ${price}. ¿Te interesa adquirirlo? 😊`;
-      }
-
-      // Guardrail: agent shared payment data but forgot to call update_order_status(PAGO_PENDIENTE).
-      // Detect payment info keywords in the response and move the order automatically.
-      if (
-        currentStatus === OrderStatus.COTIZADO &&
-        (clean.includes("BCP") || clean.includes("Interbank") || clean.includes("YAPE"))
-      ) {
-        await update_order_status(order_id, OrderStatus.PAGO_PENDIENTE);
-      }
-
-      return clean || "¡Hola! ¿En qué puedo ayudarte hoy? 😊";
-    }
-
-    messages.push({
-      role: "assistant",
-      content: choice.message.content ?? "",
-      tool_calls: choice.message.tool_calls,
-    });
-
-    for (const call of choice.message.tool_calls) {
-      const args = JSON.parse(call.function.arguments) as Record<string, unknown>;
-      const result = await executeTool(call.function.name, args);
-      if (call.function.name === "find_and_add_product") {
-        lastProductResult = result as Record<string, unknown>;
-        const res = result as Record<string, unknown>;
-
-        // Guardrail A: product already in cart + CONSULTANDO → client is confirming,
-        // go straight to PASO 4 instead of repeating the price.
-        if (res.already_added === true && currentStatus === OrderStatus.CONSULTANDO) {
-          const productName = res.name as string;
-          return `¡Perfecto! El ${productName} ya está en tu pedido 😊 Para continuar, necesito algunos datos:\n\n1. ¿Cuál es tu nombre completo?\n2. ¿Tu número de teléfono?\n3. ¿Tu dirección completa?\n4. ¿Un punto de referencia cercano a tu dirección?`;
-        }
-
-        // Guardrail B: product not in catalog → update status and return JIT message.
-        // Only applies in early states; COTIZADO+ orders never reach this branch
-        // because find_and_add_product is removed from activeTools above.
-        if ("error" in res) {
-          if (!currentStatus || !postQuoteStatuses.includes(currentStatus)) {
-            const query = args.query as string;
-            await update_order_status(order_id, OrderStatus.ESPERANDO_PROVEEDOR, query);
-            return "Permíteme validar disponibilidad con nuestro proveedor, te confirmo en breve 😊";
-          }
-        }
-      }
-      messages.push({
-        role: "tool",
-        tool_call_id: call.id,
-        content: JSON.stringify(result),
-      });
-    }
-  }
-
-  return "¡Gracias por contactarnos! Estamos procesando tu solicitud y te confirmamos en breve. 😊";
+  return (
+    result.final_response ??
+    "¡Gracias por contactarnos! Estamos procesando tu solicitud y te confirmamos en breve. 😊"
+  );
 }
