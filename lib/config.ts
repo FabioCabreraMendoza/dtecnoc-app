@@ -21,12 +21,13 @@ function resolveEnv(): AppEnv {
 
 export const APP_ENV: AppEnv = resolveEnv();
 
-// Modelos Gemini disponibles (Flash es gratis en Google AI Studio).
+// Modelos Gemini disponibles (Flash-Lite es gratis en Google AI Studio y no usa
+// "thinking", por lo que funciona bien con presupuestos de tokens bajos).
 // Confirma el nombre vigente en https://aistudio.google.com y ajústalo si cambia.
-const MODEL_FLASH = "gemini-2.0-flash"; // rápido / barato / gratis
+const MODEL_FLASH = "gemini-2.5-flash-lite"; // rápido / barato / gratis
 // Para staging/producción se puede subir a un modelo "pro" (de pago) sin tocar
-// el resto del código; por defecto se mantiene Flash para no incurrir en costos.
-const MODEL_PRO = "gemini-2.0-flash";
+// el resto del código; por defecto se mantiene Flash-Lite para no incurrir en costos.
+const MODEL_PRO = "gemini-2.5-flash-lite";
 
 export interface EnvSettings {
   /** Modelo para el agente de ventas (razonamiento). */

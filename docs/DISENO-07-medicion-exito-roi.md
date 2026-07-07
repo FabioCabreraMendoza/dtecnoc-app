@@ -39,7 +39,7 @@ sustituir estos valores de referencia.
 |----------|-----------|------|
 | Volumen mensual | 2,400 consultas | §7.2 |
 | Tokens por conversación | ~10,000 in + 1,000 out | ~5 turnos × (2k in + 200 out) |
-| Modelo de chat `gemini-2.0-flash` | US$ 0 (capa gratuita de Google AI Studio) | Flash gratis dentro de los límites de peticiones |
+| Modelo de chat `gemini-2.5-flash-lite` | US$ 0 (capa gratuita de Google AI Studio) | Flash gratis dentro de los límites de peticiones |
 | Embeddings `text-embedding-004` | ~US$ 0 (capa gratuita) | RAG |
 | Tipo de cambio | US$ 1 = S/ 3.75 | referencia |
 | % automatizado (sin escalar) | 70% | = meta KPI |
@@ -87,8 +87,8 @@ ROI anual ≈ (61,320 / 5,960) × 100 ≈ 1,029%
 | **Base** | 70% | 10 | ≈ S/ 5,110 | ≈ 0.6 meses | ≈ 1,029% |
 | Optimista | 80% | 12 | ≈ S/ 6,620 | ≈ 0.5 meses | ≈ 1,180% |
 
-Incluso en el escenario conservador el retorno es < 2 meses. El costo del LLM (≈ S/ 63/mes)
-es una fracción menor frente al ahorro laboral: el driver de valor es el **tiempo de asesor
+Incluso en el escenario conservador el retorno es < 2 meses. El costo del LLM es ≈ S/ 0
+en la capa gratuita de Gemini, así que el driver de valor es el **tiempo de asesor
 liberado**, no el precio del token.
 
 ## 7.4 Tablero de éxito (técnico + negocio)

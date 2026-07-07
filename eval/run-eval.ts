@@ -24,6 +24,12 @@ function percentile(values: number[], p: number): number {
   return sorted[Math.max(0, idx)];
 }
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+// Retardo entre casos para respetar el rate limit de la capa gratuita de Gemini.
+// Configurable con EVAL_DELAY_MS (0 lo desactiva en planes de pago).
+const DELAY_MS = Number(process.env.EVAL_DELAY_MS ?? 6000);
+
 async function main() {
   console.log(`\n▶ [${APP_ENV}] Evaluando ${GOLDEN_SET.length} casos del golden set...\n`);
 
@@ -46,6 +52,7 @@ async function main() {
     if (ok) correct++;
     rows.push({ id: c.id, ok, got, exp: c.expected, ms });
     console.log(`  ${ok ? "✓" : "✗"} ${c.id}  esperado=${c.expected}  obtenido=${got}  (${ms}ms)`);
+    if (DELAY_MS > 0) await sleep(DELAY_MS);
   }
 
   const accuracy = correct / GOLDEN_SET.length;

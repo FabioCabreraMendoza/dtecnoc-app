@@ -9,9 +9,9 @@ entorno (nunca se versionan).
 
 | Entorno | `APP_ENV` | Propósito | Datos | Modelo ventas | LangSmith | Rama / despliegue |
 |---------|-----------|-----------|-------|---------------|-----------|-------------------|
-| **Desarrollo** | `development` | Iteración rápida y pruebas locales | Sintéticos (seed) | `gemini-2.0-flash` (gratis) | `dtecnoc-dev` | local (`npm run dev`) |
-| **Staging** | `staging` | Evaluación contra el dataset completo antes de producción | Reales anonimizados | `gemini-2.0-flash` | `dtecnoc-stg` | rama `develop` → Vercel Preview |
-| **Producción** | `production` | Tráfico real | Reales | `gemini-2.0-flash` (o modelo pro de pago) | `dtecnoc-prod` | rama `main` → Vercel Production |
+| **Desarrollo** | `development` | Iteración rápida y pruebas locales | Sintéticos (seed) | `gemini-2.5-flash-lite` (gratis) | `dtecnoc-dev` | local (`npm run dev`) |
+| **Staging** | `staging` | Evaluación contra el dataset completo antes de producción | Reales anonimizados | `gemini-2.5-flash-lite` | `dtecnoc-stg` | rama `develop` → Vercel Preview |
+| **Producción** | `production` | Tráfico real | Reales | `gemini-2.5-flash-lite` (o modelo pro de pago) | `dtecnoc-prod` | rama `main` → Vercel Production |
 
 Los valores anteriores están codificados en la matriz `SETTINGS` de `lib/config.ts`.
 Cambiar `APP_ENV` cambia automáticamente modelo, proyecto LangSmith, nivel de log y `k` de RAG.
@@ -50,8 +50,9 @@ grafo pasa a `PostgresSaver`, ver [`MIGRATION.md`](MIGRATION.md)).
 ## §8.4 — Configuración y secretos
 
 - **No secreto**, versionado: `lib/config.ts` (modelos, proyecto LangSmith, `k`, logs).
-- **Secreto**, por entorno: variables de entorno. En local, `.env.local` (ignorado por
-  git); en la nube, *Environment Variables* de Vercel separadas por entorno.
+- **Secreto**, por entorno: variables de entorno. En local, `.env` (ignorado por git;
+  lo leen Next, Prisma y los scripts `tsx`); en la nube, *Environment Variables* de
+  Vercel separadas por entorno.
 - `validateSecrets()` (en `lib/config.ts`) hace *fail-fast* con mensaje claro al arrancar
   scripts (`seed`, `eval`, `reindex-rag`).
 - Rotación de claves: recomendada trimestral; mínimo privilegio en credenciales de BD.
@@ -80,7 +81,7 @@ grafo pasa a `PostgresSaver`, ver [`MIGRATION.md`](MIGRATION.md)).
 
 ```bash
 # Desarrollo (local)
-cp .env.example .env.local      # rellena secretos de DEV
+cp .env.example .env            # rellena secretos de DEV (los scripts leen .env)
 APP_ENV=development npm run dev
 
 # Verificación previa a PR (equivale a la CI)
