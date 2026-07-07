@@ -140,9 +140,11 @@ async function agentNode(state: SalesStateT): Promise<Partial<SalesStateT>> {
   );
   const model = primary.withFallbacks([fallback]);
 
+  // Gemini exige un único mensaje de sistema al inicio: fusionamos prompt + contexto.
   const promptMessages: BaseMessage[] = [
-    new SystemMessage(SYSTEM_PROMPT),
-    new SystemMessage(`Contexto actual:${orderInfo}\nOrder ID: ${state.order_id}`),
+    new SystemMessage(
+      `${SYSTEM_PROMPT}\n\nContexto actual:${orderInfo}\nOrder ID: ${state.order_id}`
+    ),
     ...state.messages,
   ];
 
