@@ -60,13 +60,14 @@ export function fastChat(opts: ChatOptions = {}): ChatGoogleGenerativeAI {
 }
 
 // ── Embeddings ────────────────────────────────────────────────────────────────
-// text-embedding-004 de Google (§3.3 del documento de diseño).
+// gemini-embedding-001 de Google (3072 dim). Reemplaza a text-embedding-004, que
+// no está disponible en la API gratuita v1beta para todas las claves. §3.3
 let _embeddings: GoogleGenerativeAIEmbeddings | null = null;
 export function getEmbeddings(): GoogleGenerativeAIEmbeddings {
   if (!_embeddings) {
     _embeddings = new GoogleGenerativeAIEmbeddings({
       apiKey: process.env.GOOGLE_API_KEY,
-      model: "text-embedding-004",
+      model: "gemini-embedding-001",
     });
   }
   return _embeddings;

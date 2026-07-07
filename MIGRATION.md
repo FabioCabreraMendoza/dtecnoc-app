@@ -11,7 +11,7 @@ hacia **LangChain / LangGraph / LangSmith**, y mapea cada cambio a las secciones
 | Framework | Groq SDK (bucles a mano) | LangChain + LangGraph.js | §3.1, §3.5 |
 | Modelo LLM | `groq-sdk` (llama) | `@langchain/google-genai` (`ChatGoogleGenerativeAI`) — **Gemini Flash** (capa gratuita) | §3.1 |
 | Orquestación de ventas | bucle `for` manual | `StateGraph` con estado tipado, nodos y aristas condicionales | §3.5 |
-| RAG | keyword `ILIKE` | `PGVectorStore` (pgvector) + embeddings `text-embedding-004` | §3.3 |
+| RAG | keyword `ILIKE` | `PGVectorStore` (pgvector) + embeddings `gemini-embedding-001` | §3.3 |
 | Salida estructurada | `JSON.parse` frágil | `withStructuredOutput` + esquemas **zod** | §3.7 |
 | Robustez | fallback 429 manual | `maxRetries`, `timeout`, `withFallbacks`, `InMemoryCache` | §3.8 |
 | Observabilidad | ninguna | LangSmith (tracing automático por env) | §5.3 |
@@ -41,7 +41,7 @@ hacia **LangChain / LangGraph / LangSmith**, y mapea cada cambio a las secciones
 
 Además de lo anterior, el nuevo stack requiere (ver `.env.example`):
 
-1. `GOOGLE_API_KEY` — embeddings `text-embedding-004`.
+1. `GOOGLE_API_KEY` — embeddings `gemini-embedding-001`.
 2. `LANGSMITH_TRACING=true`, `LANGSMITH_API_KEY`, `LANGSMITH_PROJECT` — observabilidad.
 3. Extensión pgvector en Postgres/Supabase:
    ```sql

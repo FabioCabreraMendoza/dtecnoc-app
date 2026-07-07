@@ -33,8 +33,8 @@ async function main() {
 }
 
 main()
+  .then(() => process.exit(0)) // PGVectorStore deja un pool abierto; forzamos salida
   .catch((e) => {
     console.error(e);
     process.exit(1);
-  })
-  .finally(() => prisma.$disconnect());
+  });

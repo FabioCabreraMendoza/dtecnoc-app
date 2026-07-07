@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit",
     "commitlint": "commitlint",
     "reindex-rag": "tsx scripts/reindex-rag.ts",
+    "seed-knowledge": "tsx scripts/seed-knowledge.ts",
     "eval": "tsx eval/run-eval.ts",
     "eval:langsmith": "tsx eval/langsmith-eval.ts"
   },

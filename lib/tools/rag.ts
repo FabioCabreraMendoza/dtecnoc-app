@@ -9,7 +9,7 @@ import { config } from "@/lib/config";
  * §3.3 — Subsistema RAG (recuperación semántica).
  *
  * Sustituye la antigua búsqueda por keyword ILIKE por un vector store real
- * (pgvector sobre Supabase/Postgres) con embeddings text-embedding-004.
+ * (pgvector sobre Supabase/Postgres) con embeddings gemini-embedding-001.
  *
  * Parámetros de diseño (§3.3):
  *  - Chunking recursive, objetivo ~800 tokens, overlap ~120.

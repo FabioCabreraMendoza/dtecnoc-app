@@ -40,7 +40,7 @@ sustituir estos valores de referencia.
 | Volumen mensual | 2,400 consultas | §7.2 |
 | Tokens por conversación | ~10,000 in + 1,000 out | ~5 turnos × (2k in + 200 out) |
 | Modelo de chat `gemini-2.5-flash-lite` | US$ 0 (capa gratuita de Google AI Studio) | Flash gratis dentro de los límites de peticiones |
-| Embeddings `text-embedding-004` | ~US$ 0 (capa gratuita) | RAG |
+| Embeddings `gemini-embedding-001` | ~US$ 0 (capa gratuita) | RAG |
 | Tipo de cambio | US$ 1 = S/ 3.75 | referencia |
 | % automatizado (sin escalar) | 70% | = meta KPI |
 | Tiempo ahorrado por caso automatizado | 18 min | = baseline |
