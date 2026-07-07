@@ -21,9 +21,12 @@ function resolveEnv(): AppEnv {
 
 export const APP_ENV: AppEnv = resolveEnv();
 
-// Modelos Groq disponibles.
-const MODEL_FLASH = "llama-3.1-8b-instant"; // rápido / barato
-const MODEL_PRO = "llama-3.3-70b-versatile"; // razonamiento
+// Modelos Gemini disponibles (Flash es gratis en Google AI Studio).
+// Confirma el nombre vigente en https://aistudio.google.com y ajústalo si cambia.
+const MODEL_FLASH = "gemini-2.0-flash"; // rápido / barato / gratis
+// Para staging/producción se puede subir a un modelo "pro" (de pago) sin tocar
+// el resto del código; por defecto se mantiene Flash para no incurrir en costos.
+const MODEL_PRO = "gemini-2.0-flash";
 
 export interface EnvSettings {
   /** Modelo para el agente de ventas (razonamiento). */
@@ -80,8 +83,9 @@ if (config.tracingEnabled && !process.env.LANGSMITH_PROJECT) {
 // Se valida bajo demanda para no romper `next build` sin secretos.
 const secretsSchema = z.object({
   DATABASE_URL: z.string().min(1, "DATABASE_URL requerido"),
-  GROQ_API_KEY: z.string().min(1, "GROQ_API_KEY requerido"),
-  GOOGLE_API_KEY: z.string().min(1, "GOOGLE_API_KEY requerido (embeddings RAG)"),
+  GOOGLE_API_KEY: z
+    .string()
+    .min(1, "GOOGLE_API_KEY requerido (chat Gemini + embeddings RAG)"),
   JWT_SECRET: z.string().min(1, "JWT_SECRET requerido"),
   ADMIN_SECRET: z.string().min(1, "ADMIN_SECRET requerido"),
 });

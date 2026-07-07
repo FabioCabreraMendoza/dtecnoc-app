@@ -5,7 +5,7 @@
  * 2. Ejecuta un experimento sobre el dataset con un evaluador de correctness.
  *
  * Uso: npx tsx eval/langsmith-eval.ts
- * Requiere LANGSMITH_API_KEY, LANGSMITH_PROJECT y GROQ_API_KEY.
+ * Requiere LANGSMITH_API_KEY, LANGSMITH_PROJECT y GOOGLE_API_KEY.
  *
  * Cada experimento es comparable con el baseline en la UI de LangSmith; la regla
  * de promoción (§5.3.3 / §8.2) es no desplegar si cae frente al baseline.

@@ -38,9 +38,8 @@ sustituir estos valores de referencia.
 | Supuesto | Valor base | Nota |
 |----------|-----------|------|
 | Volumen mensual | 2,400 consultas | §7.2 |
-| Tokens por conversación (modelo 70b) | ~10,000 in + 1,000 out | ~5 turnos × (2k in + 200 out) |
-| Tarifa Groq `llama-3.3-70b` | US$ 0.59 / 1M in · US$ 0.79 / 1M out | *verificar tarifa vigente* |
-| Tarifa Groq `llama-3.1-8b` (ruteo) | US$ 0.05 / 1M in | despreciable por consulta |
+| Tokens por conversación | ~10,000 in + 1,000 out | ~5 turnos × (2k in + 200 out) |
+| Modelo de chat `gemini-2.0-flash` | US$ 0 (capa gratuita de Google AI Studio) | Flash gratis dentro de los límites de peticiones |
 | Embeddings `text-embedding-004` | ~US$ 0 (capa gratuita) | RAG |
 | Tipo de cambio | US$ 1 = S/ 3.75 | referencia |
 | % automatizado (sin escalar) | 70% | = meta KPI |
@@ -51,12 +50,14 @@ sustituir estos valores de referencia.
 | Concepto | Monto (S/) | Periodicidad |
 |----------|-----------|--------------|
 | Desarrollo (≈80 h-equipo × S/ 40) | 3,200 | Una vez (inversión inicial) |
-| Tokens LLM (2,400 × ~US$ 0.007 × 3.75) | ≈ 63 | Mensual |
+| Tokens LLM (Gemini Flash, capa gratuita) | ≈ 0 | Mensual |
 | Infraestructura (Supabase Pro + LangSmith) | ≈ 130 | Mensual |
 | Mantenimiento (curación datos/prompts/evals) | ≈ 100 | Mensual |
-| **Total operativo mensual** | **≈ 293** | Mensual |
+| **Total operativo mensual** | **≈ 230** | Mensual |
 
-> Costo por consulta ≈ S/ 293 / 2,400 ≈ **S/ 0.12** → cumple la meta ≤ S/ 0.50 (§7.1).
+> Costo por consulta ≈ S/ 230 / 2,400 ≈ **S/ 0.10** → cumple la meta ≤ S/ 0.50 (§7.1).
+> Nota: usar la capa gratuita de Gemini elimina el costo de tokens; si se migra a un
+> modelo de pago, sumar la tarifa correspondiente aquí.
 
 ### Beneficios cuantificables (mensual)
 
@@ -69,13 +70,13 @@ sustituir estos valores de referencia.
 ### Fórmula y resultado
 
 ```
-Beneficio neto mensual = 5,340 − 293 = S/ 5,047
+Beneficio neto mensual = 5,340 − 230 = S/ 5,110
 Periodo de retorno     = Inversión inicial / Beneficio neto mensual
-                       = 3,200 / 5,047 ≈ 0.6 meses
+                       = 3,200 / 5,110 ≈ 0.6 meses
 ROI anual (%)          = (Beneficio neto anual / Costo total anual) × 100
-Beneficio neto anual   = 5,047 × 12 = 60,564
-Costo total anual      = 3,200 + (293 × 12) = 6,716
-ROI anual ≈ (60,564 / 6,716) × 100 ≈ 900%
+Beneficio neto anual   = 5,110 × 12 = 61,320
+Costo total anual      = 3,200 + (230 × 12) = 5,960
+ROI anual ≈ (61,320 / 5,960) × 100 ≈ 1,029%
 ```
 
 ### Análisis de sensibilidad (§7.3)
@@ -83,7 +84,7 @@ ROI anual ≈ (60,564 / 6,716) × 100 ≈ 900%
 | Escenario | % automatizado | S/ / hora | Beneficio neto mensual | Payback | ROI anual |
 |-----------|:--------------:|:---------:|:----------------------:|:-------:|:---------:|
 | Conservador | 50% | 8 | ≈ S/ 2,587 | ≈ 1.2 meses | ≈ 455% |
-| **Base** | 70% | 10 | ≈ S/ 5,047 | ≈ 0.6 meses | ≈ 900% |
+| **Base** | 70% | 10 | ≈ S/ 5,110 | ≈ 0.6 meses | ≈ 1,029% |
 | Optimista | 80% | 12 | ≈ S/ 6,620 | ≈ 0.5 meses | ≈ 1,180% |
 
 Incluso en el escenario conservador el retorno es < 2 meses. El costo del LLM (≈ S/ 63/mes)
@@ -114,4 +115,5 @@ Combina las métricas de §5 con los KPIs de §7.1. Es lo que se revisa con spon
 ---
 
 *Los montos son estimaciones con supuestos declarados; sustituir por mediciones reales de
-la baseline (§7.2) y la tarifa vigente de Groq antes de presentar a sponsors.*
+la baseline (§7.2) antes de presentar a sponsors. El chat corre en la capa gratuita de
+Gemini; si se migra a un modelo de pago, incorporar su tarifa vigente.*

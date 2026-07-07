@@ -9,9 +9,9 @@ entorno (nunca se versionan).
 
 | Entorno | `APP_ENV` | Propósito | Datos | Modelo ventas | LangSmith | Rama / despliegue |
 |---------|-----------|-----------|-------|---------------|-----------|-------------------|
-| **Desarrollo** | `development` | Iteración rápida y pruebas locales | Sintéticos (seed) | `llama-3.1-8b-instant` (flash) | `dtecnoc-dev` | local (`npm run dev`) |
-| **Staging** | `staging` | Evaluación contra el dataset completo antes de producción | Reales anonimizados | `llama-3.3-70b-versatile` | `dtecnoc-stg` | rama `develop` → Vercel Preview |
-| **Producción** | `production` | Tráfico real | Reales | `llama-3.3-70b-versatile` | `dtecnoc-prod` | rama `main` → Vercel Production |
+| **Desarrollo** | `development` | Iteración rápida y pruebas locales | Sintéticos (seed) | `gemini-2.0-flash` (gratis) | `dtecnoc-dev` | local (`npm run dev`) |
+| **Staging** | `staging` | Evaluación contra el dataset completo antes de producción | Reales anonimizados | `gemini-2.0-flash` | `dtecnoc-stg` | rama `develop` → Vercel Preview |
+| **Producción** | `production` | Tráfico real | Reales | `gemini-2.0-flash` (o modelo pro de pago) | `dtecnoc-prod` | rama `main` → Vercel Production |
 
 Los valores anteriores están codificados en la matriz `SETTINGS` de `lib/config.ts`.
 Cambiar `APP_ENV` cambia automáticamente modelo, proyecto LangSmith, nivel de log y `k` de RAG.
@@ -61,8 +61,7 @@ grafo pasa a `PostgresSaver`, ver [`MIGRATION.md`](MIGRATION.md)).
 | Variable | development | staging | production | Notas |
 |----------|:-----------:|:-------:|:----------:|-------|
 | `DATABASE_URL` | BD dev | BD staging | BD prod | proyecto Supabase distinto por entorno |
-| `GROQ_API_KEY` | ✓ | ✓ | ✓ | LLM |
-| `GOOGLE_API_KEY` | ✓ | ✓ | ✓ | embeddings RAG |
+| `GOOGLE_API_KEY` | ✓ | ✓ | ✓ | Gemini (chat) + embeddings RAG |
 | `LANGSMITH_API_KEY` | ✓ | ✓ | ✓ | observabilidad |
 | `JWT_SECRET` / `ADMIN_SECRET` | ✓ | ✓ | ✓ | distintos por entorno |
 | `GMAIL_*` | sandbox | buzón staging | buzón real | OAuth por entorno |

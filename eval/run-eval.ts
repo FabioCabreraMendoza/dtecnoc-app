@@ -5,7 +5,7 @@
  * compara con los umbrales. Devuelve exit code ≠ 0 si no se superan (puerta CI, §8.2).
  *
  * Uso: npx tsx eval/run-eval.ts
- * Requiere GROQ_API_KEY. Si LANGSMITH_TRACING=true + LANGSMITH_API_KEY, cada
+ * Requiere GOOGLE_API_KEY. Si LANGSMITH_TRACING=true + LANGSMITH_API_KEY, cada
  * ejecución del agente queda trazada automáticamente en LangSmith (§5.3.1).
  */
 import "dotenv/config";

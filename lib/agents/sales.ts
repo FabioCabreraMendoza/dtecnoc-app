@@ -13,7 +13,7 @@ import {
   ToolMessage,
   type BaseMessage,
 } from "@langchain/core/messages";
-import { makeChat, GROQ_MODEL, GROQ_MODEL_SALES } from "@/lib/llm";
+import { makeChat, FAST_MODEL, SALES_MODEL } from "@/lib/llm";
 import {
   findAndAddProductTool,
   updateOrderStatusTool,
@@ -131,11 +131,11 @@ async function agentNode(state: SalesStateT): Promise<Partial<SalesStateT>> {
     ? ALL_TOOLS.filter((t) => t.name !== "find_and_add_product")
     : ALL_TOOLS;
 
-  // Modelo 70b con fallback automático al 8b (§3.8), tools ligadas.
-  const primary = makeChat(GROQ_MODEL_SALES, { temperature: 0.3, maxTokens: 400 }).bindTools(
+  // Modelo de ventas con fallback automático (§3.8), tools ligadas.
+  const primary = makeChat(SALES_MODEL, { temperature: 0.3, maxTokens: 400 }).bindTools(
     activeTools
   );
-  const fallback = makeChat(GROQ_MODEL, { temperature: 0.3, maxTokens: 400 }).bindTools(
+  const fallback = makeChat(FAST_MODEL, { temperature: 0.3, maxTokens: 400 }).bindTools(
     activeTools
   );
   const model = primary.withFallbacks([fallback]);

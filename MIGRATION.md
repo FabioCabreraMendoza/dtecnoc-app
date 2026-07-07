@@ -9,7 +9,7 @@ hacia **LangChain / LangGraph / LangSmith**, y mapea cada cambio a las secciones
 | Capa | Antes | Ahora | Sección doc |
 |------|-------|-------|-------------|
 | Framework | Groq SDK (bucles a mano) | LangChain + LangGraph.js | §3.1, §3.5 |
-| Modelo LLM | `groq-sdk` | `@langchain/groq` (`ChatGroq`) — mismos modelos 70b/8b | §3.1 |
+| Modelo LLM | `groq-sdk` (llama) | `@langchain/google-genai` (`ChatGoogleGenerativeAI`) — **Gemini Flash** (capa gratuita) | §3.1 |
 | Orquestación de ventas | bucle `for` manual | `StateGraph` con estado tipado, nodos y aristas condicionales | §3.5 |
 | RAG | keyword `ILIKE` | `PGVectorStore` (pgvector) + embeddings `text-embedding-004` | §3.3 |
 | Salida estructurada | `JSON.parse` frágil | `withStructuredOutput` + esquemas **zod** | §3.7 |
@@ -19,8 +19,9 @@ hacia **LangChain / LangGraph / LangSmith**, y mapea cada cambio a las secciones
 
 ## Mapa de archivos
 
-- `lib/llm.ts` — configuración de modelos `ChatGroq` (`makeChat`, `salesChat`,
-  `fastChat`), embeddings Google y caché. Sustituye a `lib/groq.ts` (eliminado). **§3.1, §3.8**
+- `lib/llm.ts` — configuración de modelos `ChatGoogleGenerativeAI`/Gemini
+  (`makeChat`, `salesChat`, `fastChat`), embeddings Google y caché. Un solo
+  `GOOGLE_API_KEY` para chat y embeddings. Sustituye a `lib/groq.ts` (eliminado). **§3.1, §3.8**
 - `lib/tools/lc/*.ts` — herramientas LangChain (`tool()` + zod) que envuelven las
   funciones de dominio existentes. **§3.4**
 - `lib/tools/rag.ts` — RAG vectorial real: `getVectorStore`, `ingestDocument`,

@@ -18,7 +18,6 @@ jobs:
     # viven en las Environment Variables de Vercel por entorno (§8.4).
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL || 'postgresql://user:pass@localhost:5432/db' }}
-      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY || 'dummy' }}
       GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY || 'dummy' }}
       JWT_SECRET: ${{ secrets.JWT_SECRET || 'ci-jwt-secret' }}
       ADMIN_SECRET: ${{ secrets.ADMIN_SECRET || 'ci-admin-secret' }}
@@ -55,7 +54,7 @@ jobs:
     if: ${{ github.event_name == 'pull_request' }}
     env:
       APP_ENV: staging
-      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
       LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
       LANGSMITH_TRACING: ${{ secrets.LANGSMITH_API_KEY != '' && 'true' || 'false' }}
       LANGSMITH_PROJECT: dtecnoc-stg
@@ -72,9 +71,9 @@ jobs:
         run: npm ci
 
       - name: Golden set (falla si no supera umbrales §5.2)
-        if: ${{ env.GROQ_API_KEY != '' }}
+        if: ${{ env.GOOGLE_API_KEY != '' }}
         run: npm run eval
 
-      - name: Aviso si no hay GROQ_API_KEY
-        if: ${{ env.GROQ_API_KEY == '' }}
-        run: echo "::warning::Se omite la evaluación — configura el secret GROQ_API_KEY para activar la puerta de calidad."
+      - name: Aviso si no hay GOOGLE_API_KEY
+        if: ${{ env.GOOGLE_API_KEY == '' }}
+        run: echo "::warning::Se omite la evaluación — configura el secret GOOGLE_API_KEY para activar la puerta de calidad."
