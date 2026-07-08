@@ -5,6 +5,21 @@ import { inventoryAgent } from "@/lib/agents/inventory";
 import { logisticsAgent } from "@/lib/agents/logistics";
 import { OrderStatus, Prisma } from "@prisma/client";
 
+// Vercel: da margen a la función (arranque en frío + llamada al LLM). Hobby ≤ 60 s.
+export const maxDuration = 60;
+
+// Degradación elegante: si el LLM (capa gratuita) tarda demasiado o falla, respondemos
+// rápido con un mensaje amable en vez de colgar la petición hasta el timeout.
+const BUSY_MESSAGE =
+  "En este momento tenemos mucha demanda 😊 Por favor intenta de nuevo en unos segundos.";
+
+function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return Promise.race([
+    promise.catch(() => fallback), // errores del LLM (429/503) también degradan
+    new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms)),
+  ]);
+}
+
 // GET: retrieve conversation history by session_id
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -129,13 +144,22 @@ export async function POST(req: NextRequest) {
       order?.status === OrderStatus.PAGO_CONFIRMADO ||
       order?.status === OrderStatus.EN_RUTA
     ) {
-      finalResponse = await logisticsAgent(message, order_id);
+      finalResponse = await withTimeout(
+        logisticsAgent(message, order_id),
+        45_000,
+        BUSY_MESSAGE
+      );
     } else {
       // SalesAgent + InventoryAgent for pre-payment flow
       const chatHistory = (currentMessages as Array<{ role: string; content: string }>)
         .filter((m) => m.role === "user" || m.role === "assistant")
         .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
-      const agentResponse = await salesAgent(message, order_id, chatHistory);
+      // Timeout de gracia: si el LLM no responde a tiempo, degradamos sin colgar.
+      const agentResponse = await withTimeout(
+        salesAgent(message, order_id, chatHistory),
+        45_000,
+        BUSY_MESSAGE
+      );
 
       // Re-fetch order after SalesAgent — it may have added items or changed status
       const updatedOrder = await prisma.order.findUnique({

@@ -36,7 +36,9 @@ export function makeChat(
     model,
     temperature: opts.temperature ?? 0.3,
     maxOutputTokens: opts.maxTokens ?? 400,
-    maxRetries: 2, // §3.8 — reintentos ante errores transitorios del proveedor
+    // §3.8 — 1 reintento: ante 429/503 de la capa gratuita conviene fallar rápido
+    // (con más reintentos el flujo de varias llamadas se cuelga hasta el timeout).
+    maxRetries: 1,
     ...(opts.cache ? { cache: llmCache } : {}),
   });
 }
