@@ -93,3 +93,39 @@ npm run reindex-rag             # indexa la base de conocimiento al vector store
 ```
 
 En Supabase (una vez por entorno): `create extension if not exists vector;`
+
+## Despliegue en Vercel con GitHub Actions
+
+El despliegue lo orquesta [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml)
+vía Vercel CLI: **push a `main` → producción**, **PR → preview**. Pasos (una sola vez):
+
+1. **Crear el proyecto en Vercel.** En [vercel.com/new](https://vercel.com/new) importa el
+   repo `dtecnoc-app`. Framework: Next.js (autodetectado). No hace falta configurar el build.
+2. **Desactivar el auto-deploy nativo de Vercel** (para que Actions sea el único que
+   despliega y no haya despliegues duplicados). En el proyecto → **Settings → Git** →
+   desactiva *Automatically deploy* (o en *Ignored Build Step* pon `exit 0` para saltar los
+   builds disparados por Git).
+3. **Obtener los identificadores.** Ejecuta `npx vercel link` en el repo (te pide login) →
+   crea `.vercel/project.json` con `orgId` y `projectId`. O cópialos de
+   *Settings → General* (Project ID) y *Settings* de la cuenta (Team/Org ID).
+4. **Crear un token de Vercel.** [vercel.com/account/tokens](https://vercel.com/account/tokens)
+   → *Create Token*.
+5. **Añadir los 3 secrets en GitHub.** Repo → *Settings → Secrets and variables → Actions →
+   New repository secret*:
+   - `VERCEL_TOKEN` — el token del paso 4.
+   - `VERCEL_ORG_ID` — el `orgId`.
+   - `VERCEL_PROJECT_ID` — el `projectId`.
+6. **Variables de entorno en Vercel.** Proyecto → **Settings → Environment Variables**,
+   por entorno (Production / Preview):
+   `APP_ENV`, `DATABASE_URL`, `GOOGLE_API_KEY`, `JWT_SECRET`, `ADMIN_SECRET`, `CRON_SECRET`,
+   y opcionales `LANGSMITH_API_KEY` / `LANGSMITH_PROJECT` / `LANGSMITH_TRACING`,
+   `GMAIL_CLIENT_ID` / `GMAIL_CLIENT_SECRET` / `GMAIL_REFRESH_TOKEN` / `GMAIL_USER` /
+   `DEFAULT_SUPPLIER_EMAIL`, `GMAIL_PUBSUB_TOPIC` (solo producción). Ver [.env.example](.env.example).
+
+Hecho esto, cada push/PR corre CI (`ci.yml`: typecheck, lint, build, eval) y despliega a
+Vercel (`deploy.yml`). El **Vercel Cron** de [`vercel.json`](vercel.json)
+(`/api/cron/check-supplier-replies` cada 5 min) requiere plan Pro y usa `CRON_SECRET`.
+
+> Alternativa más simple (sin secrets): usar la **integración Git nativa de Vercel** para los
+> despliegues y dejar GitHub Actions solo para la CI. En ese caso, no añadas los secrets y el
+> job de `deploy.yml` se auto-omite. Elige una de las dos vías, no ambas.

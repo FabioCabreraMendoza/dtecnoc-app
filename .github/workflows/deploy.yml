@@ -1,0 +1,67 @@
+name: Deploy (Vercel)
+
+# Despliegue orquestado por GitHub Actions vía Vercel CLI (§8.2/§8.5).
+# - push a main  → despliegue de PRODUCCIÓN (--prod)
+# - PR a main/develop → despliegue PREVIEW (URL aislada por PR)
+#
+# Requiere 3 secrets del repo (Settings → Secrets and variables → Actions):
+#   VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID
+# Si no están, el job avisa y se salta (no rompe el pipeline).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main, develop]
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Deploy a Vercel
+    runs-on: ubuntu-latest
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    steps:
+      - name: Comprobar secrets de Vercel
+        id: guard
+        run: |
+          if [ -z "${{ secrets.VERCEL_TOKEN }}" ] || [ -z "${{ secrets.VERCEL_ORG_ID }}" ] || [ -z "${{ secrets.VERCEL_PROJECT_ID }}" ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Falta VERCEL_TOKEN / VERCEL_ORG_ID / VERCEL_PROJECT_ID — se omite el despliegue. Ver ENVIRONMENTS.md."
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.guard.outputs.enabled == 'true'
+        uses: actions/checkout@v4
+
+      - if: steps.guard.outputs.enabled == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Instalar Vercel CLI
+        if: steps.guard.outputs.enabled == 'true'
+        run: npm install -g vercel@latest
+
+      - name: Descargar configuración del entorno
+        if: steps.guard.outputs.enabled == 'true'
+        run: >
+          vercel pull --yes
+          --environment=${{ github.ref == 'refs/heads/main' && 'production' || 'preview' }}
+          --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Build
+        if: steps.guard.outputs.enabled == 'true'
+        run: vercel build ${{ github.ref == 'refs/heads/main' && '--prod' || '' }} --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Deploy
+        if: steps.guard.outputs.enabled == 'true'
+        run: >
+          vercel deploy --prebuilt
+          ${{ github.ref == 'refs/heads/main' && '--prod' || '' }}
+          --token=${{ secrets.VERCEL_TOKEN }}
