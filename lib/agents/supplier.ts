@@ -4,6 +4,7 @@ import {
   notify_client_price,
 } from "@/lib/tools/supplier";
 import { prisma } from "@/lib/prisma";
+import { stripQuotedReply } from "@/lib/gmail";
 import { Prisma } from "@prisma/client";
 
 export interface SupplierAgentResult {
@@ -48,6 +49,9 @@ export async function supplierAgent(
   });
 
   if (!chat) return { order_now_cotizado: false, followup_sent: false };
+
+  // Limpia la cita del correo original; deja solo lo que escribió el proveedor.
+  supplier_email_body = stripQuotedReply(supplier_email_body) || supplier_email_body;
 
   // Prefer the explicitly requested product (stored in notes) over the catalog item.
   // This handles out-of-catalog products (e.g. "Cliente solicita: iPhone 15").

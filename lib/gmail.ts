@@ -73,6 +73,32 @@ export function extractBodyFromPayload(payload: GmailPart): string {
   return "";
 }
 
+/**
+ * Quita el texto citado de una respuesta de correo (la respuesta va arriba; debajo
+ * queda el original citado con ">" y una línea de atribución "El <fecha>, X escribió:").
+ * Devuelve solo el texto que el proveedor escribió.
+ */
+export function stripQuotedReply(body: string): string {
+  const kept: string[] = [];
+  for (const line of body.split(/\r?\n/)) {
+    if (line.trimStart().startsWith(">")) break; // inicio del bloque citado
+    kept.push(line);
+  }
+  // Quitar líneas de atribución al final (pueden venir envueltas en 2 líneas)
+  while (kept.length) {
+    const last = kept[kept.length - 1].trim();
+    if (
+      last === "" ||
+      /escribi[oó]:$/i.test(last) ||
+      /wrote:$/i.test(last) ||
+      /^(El|On)\s.+\d/.test(last)
+    ) {
+      kept.pop();
+    } else break;
+  }
+  return kept.join("\n").trim();
+}
+
 export async function getEmailBody(messageId: string): Promise<string> {
   const msg = await gmail.users.messages.get({
     userId: "me",

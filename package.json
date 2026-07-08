@@ -9,6 +9,7 @@
     "lint": "eslint",
     "postinstall": "prisma generate",
     "seed": "tsx prisma/seed.ts",
+    "clean": "tsx prisma/clean.ts",
     "typecheck": "tsc --noEmit",
     "commitlint": "commitlint",
     "reindex-rag": "tsx scripts/reindex-rag.ts",
