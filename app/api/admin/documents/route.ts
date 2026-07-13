@@ -4,14 +4,22 @@ import { requireAdmin } from "@/lib/middleware-auth";
 import { ingestDocument, deleteDocumentVectors } from "@/lib/tools/rag";
 
 async function getHandler(_req: NextRequest) {
+  // El filtro NOT: { metadata_json: { path: ["type"], equals: ... } } de Prisma
+  // se traduce a SQL con lógica de 3 valores: para las filas SIN esa clave (todos
+  // los documentos reales, que solo tienen title/category) la comparación da NULL,
+  // y NOT NULL también es NULL — una fila con WHERE = NULL se EXCLUYE, no se
+  // incluye. Resultado real: el filtro excluía los 5 documentos reales (bug
+  // encontrado en pruebas; la página de admin mostraba "sin documentos" pese a
+  // que el RAG sí los usaba correctamente). Se filtra en JS para evitar la
+  // trampa de NULL en JSON paths de Prisma/Postgres.
   const docs = await prisma.embeddingDocument.findMany({
-    where: {
-      NOT: { metadata_json: { path: ["type"], equals: "gmail_history_id" } },
-    },
     orderBy: { updated_at: "desc" },
     select: { id: true, content: true, metadata_json: true, created_at: true, updated_at: true },
   });
-  return NextResponse.json(docs);
+  const visible = docs.filter(
+    (d) => (d.metadata_json as Record<string, unknown> | null)?.type !== "gmail_history_id"
+  );
+  return NextResponse.json(visible);
 }
 
 async function postHandler(req: NextRequest) {
