@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { shouldForcePagoPendiente } from "./sales";
+import { shouldForcePagoPendiente, ensurePaymentInfoShown } from "./sales";
 import { OrderStatus } from "@prisma/client";
 
 describe("shouldForcePagoPendiente", () => {
@@ -53,4 +53,50 @@ describe("shouldForcePagoPendiente", () => {
       true
     );
   });
+});
+
+describe("ensurePaymentInfoShown", () => {
+  const NO_PAYMENT_TEXT =
+    "El pedido ha sido registrado con estado PAGO_PENDIENTE. ¡Gracias!";
+  const WITH_PAYMENT_TEXT =
+    "Aquí tienes los datos de pago: BCP cuenta 123-456789-0-12. ¡Gracias!";
+
+  // Regresión: bug real donde el LLM llamó update_order_status(PAGO_PENDIENTE)
+  // directamente (saltándose PASO 5/6) y el cliente nunca recibió los datos de
+  // pago, aunque su pedido ya estaba "listo para pagar".
+  it("regresión: agrega los datos de pago si el pedido está PAGO_PENDIENTE y la respuesta no los menciona", () => {
+    const result = ensurePaymentInfoShown(
+      NO_PAYMENT_TEXT,
+      OrderStatus.PAGO_PENDIENTE
+    );
+    expect(result).toContain(NO_PAYMENT_TEXT);
+    expect(result).toContain("BCP");
+    expect(result).toContain("Interbank");
+    expect(result).toContain("YAPE");
+  });
+
+  it("no duplica los datos de pago si la respuesta ya los incluye", () => {
+    const result = ensurePaymentInfoShown(
+      WITH_PAYMENT_TEXT,
+      OrderStatus.PAGO_PENDIENTE
+    );
+    expect(result).toBe(WITH_PAYMENT_TEXT);
+  });
+
+  it.each([
+    OrderStatus.CONSULTANDO,
+    OrderStatus.ESPERANDO_PROVEEDOR,
+    OrderStatus.COTIZADO,
+    OrderStatus.PAGO_CONFIRMADO,
+    OrderStatus.EN_RUTA,
+    OrderStatus.COMPLETADO,
+    OrderStatus.CANCELADO,
+  ])(
+    "no agrega nada si el estado no es PAGO_PENDIENTE (%s)",
+    (status) => {
+      expect(ensurePaymentInfoShown(NO_PAYMENT_TEXT, status)).toBe(
+        NO_PAYMENT_TEXT
+      );
+    }
+  );
 });
