@@ -39,8 +39,8 @@ sustituir estos valores de referencia.
 |----------|-----------|------|
 | Volumen mensual | 2,400 consultas | §7.2 |
 | Tokens por conversación | ~10,000 in + 1,000 out | ~5 turnos × (2k in + 200 out) |
-| Modelo de chat `gemini-2.5-flash-lite` | US$ 0 (capa gratuita de Google AI Studio) | Flash gratis dentro de los límites de peticiones |
-| Embeddings `gemini-embedding-001` | ~US$ 0 (capa gratuita) | RAG |
+| Modelo de chat `deepseek-v4-flash` | US$ 0.14 / 1M tokens in, US$ 0.28 / 1M tokens out | Tarifa pago-por-uso (ADR-006); ver https://api-docs.deepseek.com/quick_start/pricing |
+| Embeddings `gemini-embedding-001` | ~US$ 0 (capa gratuita de Google AI Studio) | RAG |
 | Tipo de cambio | US$ 1 = S/ 3.75 | referencia |
 | % automatizado (sin escalar) | 70% | = meta KPI |
 | Tiempo ahorrado por caso automatizado | 18 min | = baseline |
@@ -50,14 +50,15 @@ sustituir estos valores de referencia.
 | Concepto | Monto (S/) | Periodicidad |
 |----------|-----------|--------------|
 | Desarrollo (≈80 h-equipo × S/ 40) | 3,200 | Una vez (inversión inicial) |
-| Tokens LLM (Gemini Flash, capa gratuita) | ≈ 0 | Mensual |
+| Tokens LLM (`deepseek-v4-flash`, 2,400 × 11k tok) | ≈ 15 | Mensual |
 | Infraestructura (Supabase Pro + LangSmith) | ≈ 130 | Mensual |
 | Mantenimiento (curación datos/prompts/evals) | ≈ 100 | Mensual |
-| **Total operativo mensual** | **≈ 230** | Mensual |
+| **Total operativo mensual** | **≈ 245** | Mensual |
 
-> Costo por consulta ≈ S/ 230 / 2,400 ≈ **S/ 0.10** → cumple la meta ≤ S/ 0.50 (§7.1).
-> Nota: usar la capa gratuita de Gemini elimina el costo de tokens; si se migra a un
-> modelo de pago, sumar la tarifa correspondiente aquí.
+> Costo de tokens: 2,400 consultas × (10k in × US$0.14/1M + 1k out × US$0.28/1M) ≈ US$ 4.03/mes
+> ≈ S/ 15 (tipo de cambio de la tabla de supuestos) — estimación conservadora sin descontar el *prompt caching*
+> de DeepSeek sobre el system prompt repetido (§6), que en la práctica baja aún más el costo.
+> Costo por consulta ≈ S/ 245 / 2,400 ≈ **S/ 0.10** → cumple la meta ≤ S/ 0.50 (§7.1).
 
 ### Beneficios cuantificables (mensual)
 
@@ -70,26 +71,26 @@ sustituir estos valores de referencia.
 ### Fórmula y resultado
 
 ```
-Beneficio neto mensual = 5,340 − 230 = S/ 5,110
+Beneficio neto mensual = 5,340 − 245 = S/ 5,095
 Periodo de retorno     = Inversión inicial / Beneficio neto mensual
-                       = 3,200 / 5,110 ≈ 0.6 meses
+                       = 3,200 / 5,095 ≈ 0.63 meses
 ROI anual (%)          = (Beneficio neto anual / Costo total anual) × 100
-Beneficio neto anual   = 5,110 × 12 = 61,320
-Costo total anual      = 3,200 + (230 × 12) = 5,960
-ROI anual ≈ (61,320 / 5,960) × 100 ≈ 1,029%
+Beneficio neto anual   = 5,095 × 12 = 61,140
+Costo total anual      = 3,200 + (245 × 12) = 6,140
+ROI anual ≈ (61,140 / 6,140) × 100 ≈ 996%
 ```
 
 ### Análisis de sensibilidad (§7.3)
 
 | Escenario | % automatizado | S/ / hora | Beneficio neto mensual | Payback | ROI anual |
 |-----------|:--------------:|:---------:|:----------------------:|:-------:|:---------:|
-| Conservador | 50% | 8 | ≈ S/ 2,587 | ≈ 1.2 meses | ≈ 455% |
-| **Base** | 70% | 10 | ≈ S/ 5,110 | ≈ 0.6 meses | ≈ 1,029% |
-| Optimista | 80% | 12 | ≈ S/ 6,620 | ≈ 0.5 meses | ≈ 1,180% |
+| Conservador | 50% | 8 | ≈ S/ 2,572 | ≈ 1.2 meses | ≈ 447% |
+| **Base** | 70% | 10 | ≈ S/ 5,095 | ≈ 0.63 meses | ≈ 996% |
+| Optimista | 80% | 12 | ≈ S/ 6,605 | ≈ 0.5 meses | ≈ 1,161% |
 
-Incluso en el escenario conservador el retorno es < 2 meses. El costo del LLM es ≈ S/ 0
-en la capa gratuita de Gemini, así que el driver de valor es el **tiempo de asesor
-liberado**, no el precio del token.
+Incluso en el escenario conservador el retorno es < 2 meses. El costo del LLM (`deepseek-v4-flash`,
+≈ S/ 15/mes) es marginal frente al total operativo (≈ S/ 245/mes), así que el driver de valor
+sigue siendo el **tiempo de asesor liberado**, no el precio del token.
 
 ## 7.4 Tablero de éxito (técnico + negocio)
 
@@ -115,5 +116,6 @@ Combina las métricas de §5 con los KPIs de §7.1. Es lo que se revisa con spon
 ---
 
 *Los montos son estimaciones con supuestos declarados; sustituir por mediciones reales de
-la baseline (§7.2) antes de presentar a sponsors. El chat corre en la capa gratuita de
-Gemini; si se migra a un modelo de pago, incorporar su tarifa vigente.*
+la baseline (§7.2) antes de presentar a sponsors. El chat corre en DeepSeek (`deepseek-v4-flash`,
+ADR-006) a tarifa pago-por-uso; revisar la tarifa vigente en
+https://api-docs.deepseek.com/quick_start/pricing antes de reportar cifras finales.*

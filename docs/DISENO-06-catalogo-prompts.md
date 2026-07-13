@@ -8,9 +8,9 @@
 
 | Prompt ID | Versión | Propósito | Modelo | Fuente | Métrica |
 |-----------|:-------:|-----------|--------|--------|---------|
-| `P-orquestador` | v1 | Clasificar intención (NUEVA_VENTA / SEGUIMIENTO / FUERA_DE_CONTEXTO) | `gemini-2.5-flash-lite` | `lib/agents/orchestrator.ts` | 100% golden set (§5.1) |
-| `P-ventas` | v1 | Asesor comercial: máquina de estados PASO 0→7 con tools | `gemini-2.5-flash-lite` | `lib/agents/sales.ts` | validado en chat real |
-| `P-logistica` | v1 | Coordinar entrega o instalación según categoría | `gemini-2.5-flash-lite` | `lib/agents/logistics.ts` | — |
+| `P-orquestador` | v1 | Clasificar intención (NUEVA_VENTA / SEGUIMIENTO / FUERA_DE_CONTEXTO) | `deepseek-v4-flash` | `lib/agents/orchestrator.ts` | 100% golden set (§5.1) |
+| `P-ventas` | v1 | Asesor comercial: máquina de estados PASO 0→7 con tools | `deepseek-v4-flash` | `lib/agents/sales.ts` | validado en chat real |
+| `P-logistica` | v1 | Coordinar entrega o instalación según categoría | `deepseek-v4-flash` | `lib/agents/logistics.ts` | — |
 | `P-saludo` | v1 | Atajo determinista (regex) sin LLM para saludos | — | `lib/agents/sales.ts` (`GREETING_RE`) | 0 tokens |
 
 > **Salida estructurada**: `P-orquestador` usa `withStructuredOutput` con un esquema **zod**

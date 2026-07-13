@@ -9,9 +9,9 @@ entorno (nunca se versionan).
 
 | Entorno | `APP_ENV` | Propósito | Datos | Modelo ventas | LangSmith | Rama / despliegue |
 |---------|-----------|-----------|-------|---------------|-----------|-------------------|
-| **Desarrollo** | `development` | Iteración rápida y pruebas locales | Sintéticos (seed) | `gemini-2.5-flash-lite` (gratis) | `dtecnoc-dev` | local (`npm run dev`) |
-| **Staging** | `staging` | Evaluación contra el dataset completo antes de producción | Reales anonimizados | `gemini-2.5-flash-lite` | `dtecnoc-stg` | rama `develop` → Vercel Preview |
-| **Producción** | `production` | Tráfico real | Reales | `gemini-2.5-flash-lite` (o modelo pro de pago) | `dtecnoc-prod` | rama `main` → Vercel Production |
+| **Desarrollo** | `development` | Iteración rápida y pruebas locales | Sintéticos (seed) | `deepseek-v4-flash` | `dtecnoc-dev` | local (`npm run dev`) |
+| **Staging** | `staging` | Evaluación contra el dataset completo antes de producción | Reales anonimizados | `deepseek-v4-flash` | `dtecnoc-stg` | rama `develop` → Vercel Preview |
+| **Producción** | `production` | Tráfico real | Reales | `deepseek-v4-flash` (o `deepseek-v4-pro`) | `dtecnoc-prod` | rama `main` → Vercel Production |
 
 Los valores anteriores están codificados en la matriz `SETTINGS` de `lib/config.ts`.
 Cambiar `APP_ENV` cambia automáticamente modelo, proyecto LangSmith, nivel de log y `k` de RAG.
@@ -62,7 +62,8 @@ grafo pasa a `PostgresSaver`, ver [`MIGRATION.md`](MIGRATION.md)).
 | Variable | development | staging | production | Notas |
 |----------|:-----------:|:-------:|:----------:|-------|
 | `DATABASE_URL` | BD dev | BD staging | BD prod | proyecto Supabase distinto por entorno |
-| `GOOGLE_API_KEY` | ✓ | ✓ | ✓ | Gemini (chat) + embeddings RAG |
+| `DEEPSEEK_API_KEY` | ✓ | ✓ | ✓ | DeepSeek (chat) |
+| `GOOGLE_API_KEY` | ✓ | ✓ | ✓ | Gemini — solo embeddings RAG |
 | `LANGSMITH_API_KEY` | ✓ | ✓ | ✓ | observabilidad |
 | `JWT_SECRET` / `ADMIN_SECRET` | ✓ | ✓ | ✓ | distintos por entorno |
 | `GMAIL_*` | sandbox | buzón staging | buzón real | OAuth por entorno |
@@ -117,7 +118,7 @@ vía Vercel CLI: **push a `main` → producción**, **PR → preview**. Pasos (u
    - `VERCEL_PROJECT_ID` — el `projectId`.
 6. **Variables de entorno en Vercel.** Proyecto → **Settings → Environment Variables**,
    por entorno (Production / Preview):
-   `APP_ENV`, `DATABASE_URL`, `GOOGLE_API_KEY`, `JWT_SECRET`, `ADMIN_SECRET`, `CRON_SECRET`,
+   `APP_ENV`, `DATABASE_URL`, `DEEPSEEK_API_KEY`, `GOOGLE_API_KEY`, `JWT_SECRET`, `ADMIN_SECRET`, `CRON_SECRET`,
    y opcionales `LANGSMITH_API_KEY` / `LANGSMITH_PROJECT` / `LANGSMITH_TRACING`,
    `GMAIL_CLIENT_ID` / `GMAIL_CLIENT_SECRET` / `GMAIL_REFRESH_TOKEN` / `GMAIL_USER` /
    `DEFAULT_SUPPLIER_EMAIL`, `GMAIL_PUBSUB_TOPIC` (solo producción). Ver [.env.example](.env.example).

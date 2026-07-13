@@ -1,4 +1,4 @@
-import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
+import { ChatDeepSeek } from "@langchain/deepseek";
 import { GoogleGenerativeAIEmbeddings } from "@langchain/google-genai";
 import { InMemoryCache } from "@langchain/core/caches";
 import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
@@ -8,9 +8,10 @@ import type { AIMessageChunk } from "@langchain/core/messages";
 import { config } from "@/lib/config";
 
 // ── Modelos ───────────────────────────────────────────────────────────────────
-// Modelos Gemini resueltos por entorno (§8.1). La misma GOOGLE_API_KEY sirve para
-// el chat y para los embeddings (un solo proveedor). Los modelos Flash son gratis
-// en la capa gratuita de Google AI Studio.
+// Modelos resueltos por entorno (§8.1). El CHAT usa DeepSeek (DEEPSEEK_API_KEY,
+// pago por uso, muy barato y sin los límites de la capa gratuita de Gemini); los
+// EMBEDDINGS del RAG se quedan en Google (GOOGLE_API_KEY), ya que DeepSeek no
+// ofrece una API de embeddings.
 export const FAST_MODEL = config.fastModel; // rápido / barato
 export const SALES_MODEL = config.salesModel; // razonamiento de ventas
 
@@ -26,19 +27,24 @@ export interface ChatOptions {
   cache?: boolean;
 }
 
-/** Crea un ChatGoogleGenerativeAI (Gemini) con reintentos y caché opcional. */
+/** Crea un ChatDeepSeek con reintentos y caché opcional. */
 export function makeChat(
   model: string,
   opts: ChatOptions = {}
-): ChatGoogleGenerativeAI {
-  return new ChatGoogleGenerativeAI({
-    apiKey: process.env.GOOGLE_API_KEY,
+): ChatDeepSeek {
+  return new ChatDeepSeek({
+    apiKey: process.env.DEEPSEEK_API_KEY,
     model,
     temperature: opts.temperature ?? 0.3,
-    maxOutputTokens: opts.maxTokens ?? 400,
-    // §3.8 — 1 reintento: ante 429/503 de la capa gratuita conviene fallar rápido
-    // (con más reintentos el flujo de varias llamadas se cuelga hasta el timeout).
+    maxTokens: opts.maxTokens ?? 400,
+    // §3.8 — 1 reintento: fallar rápido evita que un flujo de varias llamadas se
+    // cuelgue hasta el timeout ante un error transitorio del proveedor.
     maxRetries: 1,
+    // deepseek-v4-flash viene en modo "thinking" por defecto, que no admite
+    // tool_choice forzado (rompe bindTools/withStructuredOutput). Se desactiva
+    // explícitamente para usar el modo no-thinking (equivalente al legacy
+    // "deepseek-chat").
+    modelKwargs: { thinking: { type: "disabled" } },
     ...(opts.cache ? { cache: llmCache } : {}),
   });
 }
@@ -57,7 +63,7 @@ export function salesChat(
 }
 
 /** Modelo rápido para enrutamiento, logística y tareas deterministas. */
-export function fastChat(opts: ChatOptions = {}): ChatGoogleGenerativeAI {
+export function fastChat(opts: ChatOptions = {}): ChatDeepSeek {
   return makeChat(FAST_MODEL, opts);
 }
 
