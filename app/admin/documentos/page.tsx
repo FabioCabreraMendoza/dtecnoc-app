@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { adminFetch } from "@/lib/admin-fetch";
 
 interface Doc {
   id: string;
@@ -18,17 +19,12 @@ export default function DocumentosPage() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
 
-  function getToken() {
-    return localStorage.getItem("admin_token");
-  }
-
   function loadDocs() {
     setLoading(true);
-    fetch("/api/admin/documents", {
-      headers: { Authorization: `Bearer ${getToken()}` },
-    })
+    adminFetch("/api/admin/documents")
       .then((r) => r.json())
-      .then(setDocs)
+      .then((data) => setDocs(Array.isArray(data) ? data : []))
+      .catch(() => {})
       .finally(() => setLoading(false));
   }
 
@@ -37,14 +33,11 @@ export default function DocumentosPage() {
   async function handleSave() {
     if (!form.content.trim()) return;
     setSaving(true);
-    await fetch("/api/admin/documents", {
+    await adminFetch("/api/admin/documents", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${getToken()}`,
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(form),
-    });
+    }).catch(() => {});
     setSaving(false);
     setShowForm(false);
     setForm({ title: "", category: "general", content: "" });
@@ -54,10 +47,9 @@ export default function DocumentosPage() {
   async function handleDelete(id: string) {
     if (!confirm("¿Eliminar este documento?")) return;
     setDeleting(id);
-    await fetch(`/api/admin/documents?id=${id}`, {
+    await adminFetch(`/api/admin/documents?id=${id}`, {
       method: "DELETE",
-      headers: { Authorization: `Bearer ${getToken()}` },
-    });
+    }).catch(() => {});
     setDeleting(null);
     loadDocs();
   }

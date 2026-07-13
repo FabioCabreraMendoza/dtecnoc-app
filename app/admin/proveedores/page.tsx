@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { adminFetch } from "@/lib/admin-fetch";
 
 interface SupplierThread {
   id: string;
@@ -37,33 +38,30 @@ export default function ProveedoresPage() {
   const [checkingAll, setCheckingAll] = useState(false);
   const [checkAllStatus, setCheckAllStatus] = useState<string | null>(null);
 
-  function getToken() {
-    return localStorage.getItem("admin_token");
-  }
-
   useEffect(() => {
-    fetch("/api/admin/threads", {
-      headers: { Authorization: `Bearer ${getToken()}` },
-    })
+    adminFetch("/api/admin/threads")
       .then((r) => r.json())
-      .then(setThreads)
+      .then((data) => setThreads(Array.isArray(data) ? data : []))
+      .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
 
   async function checkSupplierReply(order_id: string) {
     setCheckingReply(order_id);
     try {
-      const res = await fetch("/api/admin/check-supplier-reply", {
+      const res = await adminFetch("/api/admin/check-supplier-reply", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ order_id }),
       });
       const data = await res.json();
       if (data.status === "cotizado") {
         setReplyStatus((prev) => ({ ...prev, [order_id]: "✅ Cotización registrada — pedido actualizado a COTIZADO" }));
         // Reload threads
-        fetch("/api/admin/threads", { headers: { Authorization: `Bearer ${getToken()}` } })
-          .then((r) => r.json()).then(setThreads);
+        adminFetch("/api/admin/threads")
+          .then((r) => r.json())
+          .then((d) => setThreads(Array.isArray(d) ? d : []))
+          .catch(() => {});
       } else if (data.status === "no_reply") {
         setReplyStatus((prev) => ({ ...prev, [order_id]: "⏳ El proveedor aún no ha respondido" }));
       } else if (data.status === "already_resolved") {
@@ -91,9 +89,10 @@ export default function ProveedoresPage() {
           : `ℹ️ ${data.checked} revisados — sin nuevas respuestas`
       );
       // Reload threads
-      fetch("/api/admin/threads", { headers: { Authorization: `Bearer ${getToken()}` } })
+      adminFetch("/api/admin/threads")
         .then((r) => r.json())
-        .then(setThreads);
+        .then((d) => setThreads(Array.isArray(d) ? d : []))
+        .catch(() => {});
     } catch {
       setCheckAllStatus("❌ Error al verificar");
     } finally {
@@ -105,9 +104,9 @@ export default function ProveedoresPage() {
     setTestingEmail(true);
     setTestEmailStatus(null);
     try {
-      const res = await fetch("/api/admin/test-email", {
+      const res = await adminFetch("/api/admin/test-email", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({}),
       });
       const data = await res.json();
@@ -122,9 +121,8 @@ export default function ProveedoresPage() {
   async function activateGmailWatch() {
     setActivatingWatch(true);
     try {
-      const res = await fetch("/api/gmail/watch", {
+      const res = await adminFetch("/api/gmail/watch", {
         method: "POST",
-        headers: { Authorization: `Bearer ${getToken()}` },
       });
       const data = await res.json();
       setWatchStatus(data.message ?? data.error ?? "Procesado");

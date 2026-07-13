@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { adminFetch } from "@/lib/admin-fetch";
 
 const CATEGORIES = [
   "ACCESORIO", "SMARTPHONE", "KIT_DIRECTV", "KIT_STARLINK",
@@ -36,17 +37,12 @@ export default function ProductosPage() {
   const [editId, setEditId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  function getToken() {
-    return localStorage.getItem("admin_token");
-  }
-
   function loadProducts() {
     setLoading(true);
-    fetch("/api/admin/products?active=false", {
-      headers: { Authorization: `Bearer ${getToken()}` },
-    })
+    adminFetch("/api/admin/products?active=false")
       .then((r) => r.json())
-      .then(setProducts)
+      .then((data) => setProducts(Array.isArray(data) ? data : []))
+      .catch(() => {})
       .finally(() => setLoading(false));
   }
 
@@ -58,14 +54,11 @@ export default function ProductosPage() {
       ? `/api/admin/products/${editId}`
       : "/api/admin/products";
     const method = editId ? "PATCH" : "POST";
-    await fetch(url, {
+    await adminFetch(url, {
       method,
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${getToken()}`,
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(form),
-    });
+    }).catch(() => {});
     setSaving(false);
     setShowForm(false);
     setEditId(null);
@@ -74,14 +67,11 @@ export default function ProductosPage() {
   }
 
   async function handleToggle(id: string, is_active: boolean) {
-    await fetch(`/api/admin/products/${id}`, {
+    await adminFetch(`/api/admin/products/${id}`, {
       method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${getToken()}`,
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ is_active: !is_active }),
-    });
+    }).catch(() => {});
     loadProducts();
   }
 

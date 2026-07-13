@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { adminFetch } from "@/lib/admin-fetch";
 
 const STATUSES = [
   "CONSULTANDO",
@@ -57,17 +58,12 @@ export default function PedidosPage() {
   const [quotingOrder, setQuotingOrder] = useState<string | null>(null);
   const [quotePrice, setQuotePrice] = useState("");
 
-  function getToken() {
-    return localStorage.getItem("admin_token");
-  }
-
   function loadOrders() {
     setLoading(true);
-    fetch("/api/admin/orders", {
-      headers: { Authorization: `Bearer ${getToken()}` },
-    })
+    adminFetch("/api/admin/orders")
       .then((r) => r.json())
-      .then(setOrders)
+      .then((data) => setOrders(Array.isArray(data) ? data : []))
+      .catch(() => {})
       .finally(() => setLoading(false));
   }
 
@@ -75,14 +71,11 @@ export default function PedidosPage() {
 
   async function updateStatus(order_id: string, next_status: string, extra?: Record<string, string>) {
     setUpdating(order_id);
-    await fetch(`/api/admin/orders/${order_id}`, {
+    await adminFetch(`/api/admin/orders/${order_id}`, {
       method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${getToken()}`,
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: next_status, ...extra }),
-    });
+    }).catch(() => {});
     setUpdating(null);
     loadOrders();
   }
@@ -176,11 +169,11 @@ export default function PedidosPage() {
                           </div>
                           <button
                             onClick={async () => {
-                              await fetch(`/api/admin/orders/${order.id}`, {
+                              await adminFetch(`/api/admin/orders/${order.id}`, {
                                 method: "PATCH",
-                                headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` },
+                                headers: { "Content-Type": "application/json" },
                                 body: JSON.stringify({ notes: "" }),
-                              });
+                              }).catch(() => {});
                               loadOrders();
                             }}
                             className="text-gray-300 hover:text-red-400 flex-shrink-0 text-xs"
