@@ -90,6 +90,16 @@ const POST_QUOTE_STATUSES = [
   OrderStatus.COMPLETADO,
 ] as string[];
 
+// Estados donde ya se pasó (o se saltó) la etapa de pago: no tiene sentido
+// forzar PAGO_PENDIENTE de nuevo.
+const ALREADY_PAST_PAYMENT_STATUSES = [
+  OrderStatus.PAGO_PENDIENTE,
+  OrderStatus.PAGO_CONFIRMADO,
+  OrderStatus.EN_RUTA,
+  OrderStatus.COMPLETADO,
+  OrderStatus.CANCELADO,
+] as string[];
+
 const ALL_TOOLS: StructuredToolInterface[] = [
   findAndAddProductTool,
   updateOrderStatusTool,
@@ -236,8 +246,13 @@ async function finalizeNode(state: SalesStateT): Promise<Partial<SalesStateT>> {
   }
 
   // Guardrail: compartió datos de pago pero olvidó mover el estado → PAGO_PENDIENTE.
+  // Aplica tanto si el pedido venía de COTIZADO (producto vía proveedor) como de
+  // CONSULTANDO/ESPERANDO_PROVEEDOR (producto en stock, compra directa sin pasar por
+  // cotización de proveedor) — en ambos casos el LLM puede compartir los datos de pago
+  // sin haber llamado update_order_status. update_order_status() además protege contra
+  // retroceder un estado ya avanzado (§ STATUS_RANK).
   if (
-    state.order_status === OrderStatus.COTIZADO &&
+    !ALREADY_PAST_PAYMENT_STATUSES.includes(state.order_status) &&
     (clean.includes("BCP") || clean.includes("Interbank") || clean.includes("YAPE"))
   ) {
     await update_order_status(state.order_id, OrderStatus.PAGO_PENDIENTE);
