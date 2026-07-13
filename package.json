@@ -15,7 +15,9 @@
     "reindex-rag": "tsx scripts/reindex-rag.ts",
     "seed-knowledge": "tsx scripts/seed-knowledge.ts",
     "eval": "tsx eval/run-eval.ts",
-    "eval:langsmith": "tsx eval/langsmith-eval.ts"
+    "eval:langsmith": "tsx eval/langsmith-eval.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -56,6 +58,7 @@
     "tailwindcss": "^4",
     "ts-node": "^10.9.2",
     "tsx": "^4.22.3",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^3.2.7"
   }
 }

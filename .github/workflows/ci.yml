@@ -18,6 +18,7 @@ jobs:
     # viven en las Environment Variables de Vercel por entorno (§8.4).
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL || 'postgresql://user:pass@localhost:5432/db' }}
+      DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY || 'dummy' }}
       GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY || 'dummy' }}
       JWT_SECRET: ${{ secrets.JWT_SECRET || 'ci-jwt-secret' }}
       ADMIN_SECRET: ${{ secrets.ADMIN_SECRET || 'ci-admin-secret' }}
@@ -42,6 +43,9 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Unit tests
+        run: npm run test
+
       - name: Build
         run: npm run build
 
@@ -54,6 +58,7 @@ jobs:
     if: ${{ github.event_name == 'pull_request' }}
     env:
       APP_ENV: staging
+      DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
       GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
       LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
       LANGSMITH_TRACING: ${{ secrets.LANGSMITH_API_KEY != '' && 'true' || 'false' }}
@@ -71,9 +76,9 @@ jobs:
         run: npm ci
 
       - name: Golden set (falla si no supera umbrales §5.2)
-        if: ${{ env.GOOGLE_API_KEY != '' }}
+        if: ${{ env.DEEPSEEK_API_KEY != '' && env.GOOGLE_API_KEY != '' }}
         run: npm run eval
 
-      - name: Aviso si no hay GOOGLE_API_KEY
-        if: ${{ env.GOOGLE_API_KEY == '' }}
-        run: echo "::warning::Se omite la evaluación — configura el secret GOOGLE_API_KEY para activar la puerta de calidad."
+      - name: Aviso si faltan credenciales del LLM
+        if: ${{ env.DEEPSEEK_API_KEY == '' || env.GOOGLE_API_KEY == '' }}
+        run: echo "::warning::Se omite la evaluación — configura los secrets DEEPSEEK_API_KEY (chat) y GOOGLE_API_KEY (embeddings) para activar la puerta de calidad."
