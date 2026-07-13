@@ -11,6 +11,7 @@ import {
 } from "@/lib/tools/lc/logistics-tools";
 import type { StructuredToolInterface } from "@langchain/core/tools";
 import { get_order_status } from "@/lib/tools/inventory";
+import { toLcMessage, type ChatTurn } from "@/lib/agents/message-utils";
 
 const INSTALLATION_CATEGORIES = [
   "CAMARA",
@@ -38,7 +39,8 @@ const TOOL_MAP: Record<string, StructuredToolInterface> = Object.fromEntries(
 
 export async function logisticsAgent(
   message: string,
-  order_id: string
+  order_id: string,
+  history: ChatTurn[] = []
 ): Promise<string> {
   const orderCtx = await get_order_status(order_id);
 
@@ -56,11 +58,17 @@ export async function logisticsAgent(
 
   const model = fastChat({ temperature: 0.6, maxTokens: 500 }).bindTools(TOOLS);
 
+  // El historial es imprescindible aquí: coordinar una instalación toma varios
+  // turnos (fecha → horario → dirección) y sin memoria de la conversación el
+  // agente "olvida" lo que el cliente ya dijo en el turno anterior (bug real
+  // detectado en pruebas: preguntó la fecha de nuevo justo después de que el
+  // cliente eligiera un horario para la fecha que ya había dado).
   const messages: BaseMessage[] = [
-    new SystemMessage(SYSTEM_PROMPT),
-    new HumanMessage(
-      `Mensaje del cliente: "${message}"${orderInfo}\nOrder ID: ${order_id}`
+    new SystemMessage(
+      `${SYSTEM_PROMPT}\n\nContexto actual:${orderInfo}\nOrder ID: ${order_id}`
     ),
+    ...history.slice(-6).map(toLcMessage),
+    new HumanMessage(message),
   ];
 
   for (let i = 0; i < 3; i++) {

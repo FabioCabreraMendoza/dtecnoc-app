@@ -22,6 +22,7 @@ import { ragQueryTool } from "@/lib/tools/lc/rag-tool";
 import { update_order_status, get_order_status } from "@/lib/tools/inventory";
 import type { StructuredToolInterface } from "@langchain/core/tools";
 import { OrderStatus } from "@prisma/client";
+import { toLcMessage, type ChatTurn } from "@/lib/agents/message-utils";
 
 // Fuente única de los datos de pago — se usa tanto en el prompt (para que el LLM
 // los comparta él mismo en PASO 6) como en el guardrail determinista de
@@ -358,10 +359,6 @@ const salesGraph = buildSalesGraph();
 const GREETING_RE =
   /^(hola+|buenas?|buenos?\s+(d[ií]as?|tardes?|noches?)|hey|saludos?|hi|hello|qu[eé]\s+tal|como\s+est[aá]s?|ola|buen\s+d[ií]a)\W*$/i;
 
-function toLcMessage(m: { role: "user" | "assistant"; content: string }): BaseMessage {
-  return m.role === "user" ? new HumanMessage(m.content) : new AIMessage(m.content);
-}
-
 /**
  * Punto de entrada público — misma firma que la versión original.
  * Orquesta el flujo de ventas mediante el grafo LangGraph.
@@ -369,7 +366,7 @@ function toLcMessage(m: { role: "user" | "assistant"; content: string }): BaseMe
 export async function salesAgent(
   message: string,
   order_id: string,
-  history: Array<{ role: "user" | "assistant"; content: string }> = []
+  history: ChatTurn[] = []
 ): Promise<string> {
   if (GREETING_RE.test(message.trim()) && history.length <= 1) {
     return "¡Hola! 😊 ¿En qué puedo ayudarte hoy? Ofrecemos smartphones, tablets, cámaras de seguridad, antenas Starlink, kits DirecTV, paneles solares y accesorios.";
