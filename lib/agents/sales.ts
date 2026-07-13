@@ -23,14 +23,19 @@ import { update_order_status, get_order_status } from "@/lib/tools/inventory";
 import type { StructuredToolInterface } from "@langchain/core/tools";
 import { OrderStatus } from "@prisma/client";
 
+// Fuente única de los datos de pago — se usa tanto en el prompt (para que el LLM
+// los comparta él mismo en PASO 6) como en el guardrail determinista de
+// finalizeNode (por si el LLM salta el paso y nunca los muestra).
+const PAYMENT_INFO_BLOCK = `- BCP: Cta. 123-456789-0-12 | CCI 002-123-004567890-12 | A nombre de: DTECNOC S.A.C.
+- Interbank: Cta. 200-3001234567 | CCI 003-200-003001234567-34 | A nombre de: DTECNOC S.A.C.
+- YAPE / PLIN / DALE: 987-654-321 (a nombre de DTECNOC S.A.C.)
+- Teléfono de ventas: 044-123-456`;
+
 // ── Prompt de sistema (§3.5 — instrucciones del nodo agente) ─────────────────
 const SYSTEM_PROMPT = `Eres el asesor comercial de DTECNOC, empresa de tecnología e instalaciones en Perú (Trujillo).
 
 DATOS DE PAGO DE LA EMPRESA (usa siempre estos):
-- BCP: Cta. 123-456789-0-12 | CCI 002-123-004567890-12 | A nombre de: DTECNOC S.A.C.
-- Interbank: Cta. 200-3001234567 | CCI 003-200-003001234567-34 | A nombre de: DTECNOC S.A.C.
-- YAPE / PLIN / DALE: 987-654-321 (a nombre de DTECNOC S.A.C.)
-- Teléfono de ventas: 044-123-456
+${PAYMENT_INFO_BLOCK}
 
 PASO 0 — SALUDO O MENSAJE GENÉRICO:
 - Si el cliente saluda ("hola", "buenos días", etc.) o escribe algo que NO es una consulta de producto: responde con un saludo amigable y pregunta en qué puedes ayudarle. NO llames ninguna herramienta.
@@ -117,6 +122,33 @@ export function shouldForcePagoPendiente(
       responseText.includes("Interbank") ||
       responseText.includes("YAPE"))
   );
+}
+
+const PAYMENT_REMINDER_SUFFIX = `Aquí tienes los datos de pago:
+${PAYMENT_INFO_BLOCK}
+
+Avísanos cuando hayas realizado el depósito. ¡Muchas gracias! 😊`;
+
+/**
+ * Guardrail inverso al de arriba: el pedido YA está en PAGO_PENDIENTE (el LLM
+ * pudo haber llamado update_order_status directamente, saltándose el PASO 6)
+ * pero la respuesta nunca mostró los datos de pago — el cliente no sabría cómo
+ * pagar aunque su pedido ya esté "listo". Le agrega los datos de pago al final
+ * en vez de dejar al cliente sin esa información. Función pura para testear
+ * sin invocar el grafo completo.
+ */
+export function ensurePaymentInfoShown(
+  responseText: string,
+  currentOrderStatus: string
+): string {
+  const hasPaymentInfo =
+    responseText.includes("BCP") ||
+    responseText.includes("Interbank") ||
+    responseText.includes("YAPE");
+  if (currentOrderStatus === OrderStatus.PAGO_PENDIENTE && !hasPaymentInfo) {
+    return `${responseText}\n\n${PAYMENT_REMINDER_SUFFIX}`;
+  }
+  return responseText;
 }
 
 const ALL_TOOLS: StructuredToolInterface[] = [
@@ -269,6 +301,15 @@ async function finalizeNode(state: SalesStateT): Promise<Partial<SalesStateT>> {
   // (§ STATUS_RANK).
   if (shouldForcePagoPendiente(state.order_status, clean)) {
     await update_order_status(state.order_id, OrderStatus.PAGO_PENDIENTE);
+  }
+
+  // Guardrail inverso: el pedido puede haber llegado a PAGO_PENDIENTE en este
+  // mismo turno (el LLM llamó update_order_status directamente en toolsNode,
+  // saltándose el PASO 6) sin mostrar los datos de pago. Se relee el estado
+  // real post-tool-calls (state.order_status es el de ANTES de este turno).
+  const currentCtx = await get_order_status(state.order_id);
+  if (!("error" in currentCtx)) {
+    clean = ensurePaymentInfoShown(clean, currentCtx.status);
   }
 
   return { final_response: clean || "¡Hola! ¿En qué puedo ayudarte hoy? 😊" };
