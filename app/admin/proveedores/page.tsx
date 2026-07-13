@@ -80,7 +80,7 @@ export default function ProveedoresPage() {
     setCheckingAll(true);
     setCheckAllStatus(null);
     try {
-      const res = await fetch("/api/cron/check-supplier-replies");
+      const res = await adminFetch("/api/cron/check-supplier-replies");
       const data = await res.json() as { checked: number; results: Array<{ order_id: string; status: string }> };
       const cotizados = data.results.filter((r) => r.status === "cotizado").length;
       setCheckAllStatus(

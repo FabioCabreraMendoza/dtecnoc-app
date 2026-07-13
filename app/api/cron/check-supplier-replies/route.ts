@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { gmail_v1 } from "googleapis";
 import { gmail, extractBodyFromPayload } from "@/lib/gmail";
 import { supplierAgent } from "@/lib/agents/supplier";
+import { verifyToken } from "@/lib/auth";
 
 function getFrom(msg: gmail_v1.Schema$Message): string {
   const headers = msg.payload?.headers ?? [];
@@ -15,11 +16,21 @@ function getFrom(msg: gmail_v1.Schema$Message): string {
 
 export async function GET(req: NextRequest) {
   // Vercel sets Authorization: Bearer <CRON_SECRET> automatically on cron invocations.
-  // Also allow calls from the admin UI without the secret (for manual trigger).
+  // También se acepta una sesión de admin válida (cookie o Bearer del JWT) para el
+  // disparo manual desde el botón "Verificar todo" del panel — antes el comentario
+  // decía que esto se permitía pero el código nunca lo implementaba, así que ese
+  // botón fallaba con 401 en cuanto CRON_SECRET estaba configurado en Vercel.
   const authHeader = req.headers.get("authorization");
   const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const isCronInvocation = !!cronSecret && authHeader === `Bearer ${cronSecret}`;
+
+  if (!isCronInvocation) {
+    const adminToken =
+      req.cookies.get("admin_token")?.value ?? authHeader?.replace("Bearer ", "");
+    const adminPayload = adminToken ? verifyToken(adminToken) : null;
+    if (!adminPayload) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
   }
 
   const gmailUser = (process.env.GMAIL_USER ?? "").toLowerCase();
