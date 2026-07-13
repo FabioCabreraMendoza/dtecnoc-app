@@ -227,4 +227,29 @@ describe("find_and_add_product", () => {
     expect(sqlArg).toContain("'%drop%'");
     expect(sqlArg).toContain("'%table%'");
   });
+
+  // Regresión: bug real detectado en pruebas — "kit" estaba mapeado al
+  // sinónimo "directv" en SYNONYMS, así que CUALQUIER búsqueda con "kit"
+  // (Kit DVR, Kit Starlink, etc.) se ampliaba a buscar por categoría DirecTV.
+  // Sin ORDER BY además, el "mejor" resultado terminaba siendo un producto de
+  // otra categoría (se agregó "Kit DirecTV Prepago" al pedir "Kit DVR 4
+  // canales + 2 cámaras").
+  it("regresión: 'kit' ya no se mapea a la categoría directv", async () => {
+    mockSearchRows([]);
+
+    await find_and_add_product("order-1", "Kit DVR 4 canales + 2 camaras");
+
+    const sqlArg = queryRawUnsafe.mock.calls[0][0] as string;
+    expect(sqlArg).toContain("'%kit%'");
+    expect(sqlArg).not.toContain("'%directv%'");
+  });
+
+  it("el SQL ordena por relevancia (más coincidencias primero) en vez de orden arbitrario", async () => {
+    mockSearchRows([]);
+
+    await find_and_add_product("order-1", "camara seguridad");
+
+    const sqlArg = queryRawUnsafe.mock.calls[0][0] as string;
+    expect(sqlArg).toMatch(/ORDER BY relevance DESC/);
+  });
 });

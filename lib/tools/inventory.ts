@@ -98,7 +98,13 @@ const SYNONYMS: Record<string, string> = {
   // starlink
   starlink: "starlink", antena: "starlink", antenas: "starlink", internet: "starlink",
   // directv
-  directv: "directv", kit: "directv",
+  // NOTA: "kit" NO se mapea a "directv" — es una palabra genérica que aparece
+  // en muchos nombres de producto de categorías distintas (Kit Starlink, Kit
+  // DVR, kits de instalación, etc.). Mapearla forzaba cualquier búsqueda con
+  // "kit" a ampliarse a la categoría DirecTV (bug real: "Kit DVR 4 canales +
+  // 2 cámaras" terminó agregando "Kit DirecTV Prepago" al pedido). Se deja sin
+  // sinónimo para que busque el texto literal "kit" en nombre/categoría.
+  directv: "directv",
   // accessories
   accesorio: "accesorio", accesorios: "accesorio",
   cable: "cable", cables: "cable",
@@ -134,10 +140,25 @@ export async function search_products(query: string) {
     .map(w => `(name ILIKE '%${w}%' OR category::text ILIKE '%${w}%')`)
     .join(" OR ");
 
+  // Relevancia: cuenta cuántas palabras de la búsqueda coinciden con el NOMBRE
+  // (peso 2) vs. solo la categoría (peso 1). Sin esto, la consulta con varios OR
+  // no tiene orden garantizado y el "mejor" resultado (results[0]) puede terminar
+  // siendo un producto de otra categoría que solo matchea por una palabra genérica
+  // — la causa real del bug de "kit" descrito arriba.
+  const relevance = uniqueWords
+    .map(
+      w =>
+        `(CASE WHEN name ILIKE '%${w}%' THEN 2 WHEN category::text ILIKE '%${w}%' THEN 1 ELSE 0 END)`
+    )
+    .join(" + ");
+
   const products = await prisma.$queryRawUnsafe<
     Array<{ id: string; name: string; category: string; selling_price: number | null; stock_quantity: number }>
   >(
-    `SELECT id, name, category, selling_price, stock_quantity FROM "Product" WHERE ${conditions} LIMIT 5`
+    `SELECT id, name, category, selling_price, stock_quantity, (${relevance}) AS relevance
+     FROM "Product" WHERE ${conditions}
+     ORDER BY relevance DESC, name ASC
+     LIMIT 5`
   );
 
   if (products.length === 0) return { results: [], message: "No se encontraron productos. Intenta con otro término." };
