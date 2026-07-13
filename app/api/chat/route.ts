@@ -139,21 +139,25 @@ export async function POST(req: NextRequest) {
 
     let finalResponse = "";
 
+    // Historial de la conversación — lo necesitan tanto salesAgent como
+    // logisticsAgent (coordinar una instalación toma varios turnos: fecha →
+    // horario → dirección, y sin memoria el agente "olvida" lo ya acordado).
+    const chatHistory = (currentMessages as Array<{ role: string; content: string }>)
+      .filter((m) => m.role === "user" || m.role === "assistant")
+      .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
+
     // LogisticsAgent handles post-payment coordination
     if (
       order?.status === OrderStatus.PAGO_CONFIRMADO ||
       order?.status === OrderStatus.EN_RUTA
     ) {
       finalResponse = await withTimeout(
-        logisticsAgent(message, order_id),
+        logisticsAgent(message, order_id, chatHistory),
         45_000,
         BUSY_MESSAGE
       );
     } else {
       // SalesAgent + InventoryAgent for pre-payment flow
-      const chatHistory = (currentMessages as Array<{ role: string; content: string }>)
-        .filter((m) => m.role === "user" || m.role === "assistant")
-        .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
       // Timeout de gracia: si el LLM no responde a tiempo, degradamos sin colgar.
       const agentResponse = await withTimeout(
         salesAgent(message, order_id, chatHistory),
