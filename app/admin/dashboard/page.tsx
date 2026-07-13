@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { adminFetch } from "@/lib/admin-fetch";
 
 interface DashboardData {
   kpis: {
@@ -35,12 +36,10 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem("admin_token");
-    fetch("/api/admin/dashboard", {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((r) => r.json())
+    adminFetch("/api/admin/dashboard")
+      .then((r) => (r.ok ? r.json() : null))
       .then(setData)
+      .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
 
