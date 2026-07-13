@@ -20,7 +20,8 @@ Cambiar `APP_ENV` cambia automáticamente modelo, proyecto LangSmith, nivel de l
 
 Pipeline en [`.github/workflows/ci.yml`](.github/workflows/ci.yml):
 
-1. **check** (push/PR): `npm ci` → `prisma generate` → `typecheck` → `lint` → `build`.
+1. **check** (push/PR): `npm ci` → `prisma generate` → `typecheck` → `lint` → `test` (unitarios,
+   Vitest) → `build`.
 2. **evaluate** (solo PR): ejecuta el golden set (`npm run eval`) como **puerta de
    promoción** — si la exactitud/latencia caen bajo el umbral (§5.2), el PR falla.
 
@@ -86,7 +87,7 @@ cp .env.example .env            # rellena secretos de DEV (los scripts leen .env
 APP_ENV=development npm run dev
 
 # Verificación previa a PR (equivale a la CI)
-npm run typecheck && npm run lint && npm run build && npm run eval
+npm run typecheck && npm run lint && npm run test && npm run build && npm run eval
 
 # Datos
 npm run seed                    # datos sintéticos (dev)

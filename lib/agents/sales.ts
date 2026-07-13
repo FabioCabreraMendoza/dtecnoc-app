@@ -100,6 +100,25 @@ const ALREADY_PAST_PAYMENT_STATUSES = [
   OrderStatus.CANCELADO,
 ] as string[];
 
+/**
+ * Guardrail: la respuesta comparte datos de pago pero el LLM pudo haber olvidado
+ * mover el estado → PAGO_PENDIENTE. Aplica tanto si el pedido venía de COTIZADO
+ * (producto vía proveedor) como de CONSULTANDO/ESPERANDO_PROVEEDOR (producto en
+ * stock, compra directa sin pasar por cotización de proveedor). Extraída como
+ * función pura para poder probarla sin invocar el grafo completo (LLM + BD).
+ */
+export function shouldForcePagoPendiente(
+  orderStatus: string,
+  responseText: string
+): boolean {
+  return (
+    !ALREADY_PAST_PAYMENT_STATUSES.includes(orderStatus) &&
+    (responseText.includes("BCP") ||
+      responseText.includes("Interbank") ||
+      responseText.includes("YAPE"))
+  );
+}
+
 const ALL_TOOLS: StructuredToolInterface[] = [
   findAndAddProductTool,
   updateOrderStatusTool,
@@ -246,15 +265,9 @@ async function finalizeNode(state: SalesStateT): Promise<Partial<SalesStateT>> {
   }
 
   // Guardrail: compartió datos de pago pero olvidó mover el estado → PAGO_PENDIENTE.
-  // Aplica tanto si el pedido venía de COTIZADO (producto vía proveedor) como de
-  // CONSULTANDO/ESPERANDO_PROVEEDOR (producto en stock, compra directa sin pasar por
-  // cotización de proveedor) — en ambos casos el LLM puede compartir los datos de pago
-  // sin haber llamado update_order_status. update_order_status() además protege contra
-  // retroceder un estado ya avanzado (§ STATUS_RANK).
-  if (
-    !ALREADY_PAST_PAYMENT_STATUSES.includes(state.order_status) &&
-    (clean.includes("BCP") || clean.includes("Interbank") || clean.includes("YAPE"))
-  ) {
+  // update_order_status() además protege contra retroceder un estado ya avanzado
+  // (§ STATUS_RANK).
+  if (shouldForcePagoPendiente(state.order_status, clean)) {
     await update_order_status(state.order_id, OrderStatus.PAGO_PENDIENTE);
   }
 
