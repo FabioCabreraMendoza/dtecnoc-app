@@ -21,13 +21,15 @@ function resolveEnv(): AppEnv {
 
 export const APP_ENV: AppEnv = resolveEnv();
 
-// Modelos Gemini disponibles (Flash-Lite es gratis en Google AI Studio y no usa
-// "thinking", por lo que funciona bien con presupuestos de tokens bajos).
-// Confirma el nombre vigente en https://aistudio.google.com y ajústalo si cambia.
-const MODEL_FLASH = "gemini-2.5-flash-lite"; // rápido / barato / gratis
-// Para staging/producción se puede subir a un modelo "pro" (de pago) sin tocar
-// el resto del código; por defecto se mantiene Flash-Lite para no incurrir en costos.
-const MODEL_PRO = "gemini-2.5-flash-lite";
+// Modelos DeepSeek disponibles (API compatible con OpenAI, pago por uso muy barato,
+// sin los límites de la capa gratuita de Gemini). "deepseek-v4-flash" (modo no-thinking)
+// sirve tanto para enrutamiento/logística como para el razonamiento de ventas.
+// NOTA: los alias legacy "deepseek-chat"/"deepseek-reasoner" se deprecan el 2026-07-24;
+// se usa directamente el nombre vigente. Confirma en https://api-docs.deepseek.com/quick_start/pricing.
+const MODEL_FLASH = "deepseek-v4-flash"; // rápido / barato (modo no-thinking)
+// Para staging/producción se puede subir a "deepseek-v4-pro" sin tocar el resto del
+// código; por defecto se mantiene v4-flash para no incurrir en más costo.
+const MODEL_PRO = "deepseek-v4-flash";
 
 export interface EnvSettings {
   /** Modelo para el agente de ventas (razonamiento). */
@@ -84,9 +86,10 @@ if (config.tracingEnabled && !process.env.LANGSMITH_PROJECT) {
 // Se valida bajo demanda para no romper `next build` sin secretos.
 const secretsSchema = z.object({
   DATABASE_URL: z.string().min(1, "DATABASE_URL requerido"),
+  DEEPSEEK_API_KEY: z.string().min(1, "DEEPSEEK_API_KEY requerido (chat)"),
   GOOGLE_API_KEY: z
     .string()
-    .min(1, "GOOGLE_API_KEY requerido (chat Gemini + embeddings RAG)"),
+    .min(1, "GOOGLE_API_KEY requerido (embeddings RAG)"),
   JWT_SECRET: z.string().min(1, "JWT_SECRET requerido"),
   ADMIN_SECRET: z.string().min(1, "ADMIN_SECRET requerido"),
 });

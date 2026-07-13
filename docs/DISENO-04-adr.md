@@ -131,3 +131,38 @@ versionado.
 **Consecuencias.** ➕ Despliegue simple, costo proporcional al uso, rollback instantáneo en
 Vercel. ➖ Sin historial de migraciones formal (deuda técnica asumida); el `.env` único lo leen
 Next, Prisma y los scripts `tsx`.
+
+---
+
+## ADR-006 — Proveedor de chat: DeepSeek sobre Gemini free tier
+
+| | |
+|---|---|
+| **Estado** | Aceptada |
+| **Fecha** | 2026-07-09 |
+
+**Contexto.** La capa gratuita de Gemini (ADR-002) impone límites de peticiones por minuto y
+por día que, bajo uso real (pruebas + tráfico de producción concurrente), producían 429/503
+intermitentes; el fix de degradación elegante (`withTimeout`, commit `75fbb78`) evita que el
+chat se cuelgue, pero no resuelve la disponibilidad de fondo. Subir a un plan de pago de
+Gemini exige un mínimo prepago de US$ 40, desproporcionado para el volumen del proyecto.
+
+**Decisión.** Mover el **chat** a **DeepSeek vía `@langchain/deepseek`** (`ChatDeepSeek`,
+modelo `deepseek-v4-flash`), con `DEEPSEEK_API_KEY`, API compatible con OpenAI (tool-calling y
+`withStructuredOutput` funcionan sin cambios en los agentes). Se usa `deepseek-v4-flash`
+directamente (no el alias legacy `deepseek-chat`, que DeepSeek deprecó el 2026-07-24). Los
+**embeddings** del RAG se mantienen en Google (`gemini-embedding-001`, `GOOGLE_API_KEY`) porque
+DeepSeek no ofrece API de embeddings — el proyecto pasa a usar **dos proveedores de LLM**, uno
+por función.
+
+**Alternativas.** (a) Mantener Gemini y absorber el prepago de US$ 40 — descartada por costo
+desproporcionado para un MVP académico. (b) Esperar el reseteo diario de cuota — descartada:
+no resuelve el problema bajo tráfico sostenido. (c) Entrenar/hostear un modelo propio —
+descartada (ver análisis de costo): un LLM propio cuesta órdenes de magnitud más y un
+fine-tune sobre un modelo abierto requiere hosting con GPU 24/7; el conocimiento de dominio ya
+se resuelve con RAG (ADR-003), no con reentrenar el modelo.
+
+**Consecuencias.** ➕ Pago por uso real (centavos), sin bloqueo por cuota de free tier; el
+`withFallbacks` de `salesChat` sigue funcionando igual (ahora entre dos instancias de
+`deepseek-v4-flash`). ➖ Segundo proveedor a mantener (dos API keys); se pierde el "un solo
+proveedor cubre todo" de ADR-002.
