@@ -13,6 +13,44 @@ export interface SupplierAgentResult {
   followup_sent: boolean;
 }
 
+// Coincide con el inicio de una línea de logística/entrega (día, courier, etc.).
+const LOGISTICS_RE =
+  /^(disponible|recoj|agencia|courier|d[ií]as?|entrega|llega|stock|shalom|marvisur|viernes|lunes|martes|miércoles|jueves|sábado|domingo)/i;
+// Una línea que menciona precio no puede ser "el nombre del producto alternativo"
+// — evita que una respuesta de una sola oración corrida (precio + disponibilidad +
+// entrega mezclados) se cite entera como si fuera un modelo distinto (ver bug real
+// detectado en pruebas: "nos ofrecen como alternativa el Tenemos 3 unidades...").
+const PRICE_MENTION_RE = /precio|S\//i;
+
+const normalizeForCompare = (s: string) =>
+  s.toLowerCase().replace(/[^a-z0-9]/g, " ").replace(/\s+/g, " ").trim();
+
+/**
+ * Detecta si el proveedor ofreció un modelo distinto al solicitado. Devuelve la
+ * línea del "producto alternativo" solo si es plausible (no es una línea de
+ * logística ni una línea que mezcla precio con otra info), y solo si de verdad
+ * difiere del producto pedido. Extraída como función pura para poder probarla
+ * sin invocar el agente completo (BD + Gmail).
+ */
+export function detectAlternativeProductLine(
+  noteLines: string[],
+  effectiveProductName: string
+): string | null {
+  const candidate =
+    noteLines.find(
+      (l) => l.length > 5 && !LOGISTICS_RE.test(l) && !PRICE_MENTION_RE.test(l)
+    ) ?? null;
+  if (!candidate) return null;
+
+  const normalizedCandidate = normalizeForCompare(candidate);
+  const normalizedProduct = normalizeForCompare(effectiveProductName);
+  const isAlternative =
+    normalizedCandidate !== normalizedProduct &&
+    !normalizedCandidate.includes(normalizedProduct.split(" ").slice(0, 2).join(" "));
+
+  return isAlternative ? candidate : null;
+}
+
 function extractPrice(text: string): number | null {
   // Normalize currency symbols and labels
   let clean = text
@@ -91,19 +129,14 @@ export async function supplierAgent(
   );
   const availabilityNote = noteLines.join(" | ").trim();
 
-  // Try to detect the supplier's offered product name:
-  // first non-price line that looks like a product (not a date/logistics phrase)
-  const LOGISTICS_RE = /^(disponible|recoj|agencia|courier|d[ií]as?|entrega|llega|stock|shalom|marvisur|viernes|lunes|martes|miércoles|jueves|sábado|domingo)/i;
-  const supplierProductLine = noteLines.find(
-    l => l.length > 5 && !LOGISTICS_RE.test(l)
-  ) ?? null;
-
-  // Determine if the supplier is offering an alternative model
-  const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, " ").replace(/\s+/g, " ").trim();
-  const isAlternative =
-    supplierProductLine !== null &&
-    normalize(supplierProductLine) !== normalize(effectiveProductName) &&
-    !normalize(supplierProductLine).includes(normalize(effectiveProductName).split(" ").slice(0, 2).join(" "));
+  // Detecta si el proveedor ofrece un modelo distinto al solicitado (ver
+  // detectAlternativeProductLine arriba — descarta líneas de logística y
+  // líneas que mencionan precio, para no citar la respuesta entera como si
+  // fuera un nombre de producto).
+  const alternativeProductLine = detectAlternativeProductLine(
+    noteLines,
+    effectiveProductName
+  );
 
   // 1. Save cost price (only when catalog product exists)
   if (product) {
@@ -115,7 +148,7 @@ export async function supplierAgent(
 
   // 3. Update order to COTIZADO and save supplier note
   const fullNote = [
-    supplierProductLine && isAlternative ? `Alternativa: ${supplierProductLine}` : null,
+    alternativeProductLine ? `Alternativa: ${alternativeProductLine}` : null,
     availabilityNote,
   ].filter(Boolean).join(" | ");
 
@@ -129,10 +162,10 @@ export async function supplierAgent(
 
   // Build client message — distinguish between exact match and alternative model
   let client_message: string;
-  if (isAlternative && supplierProductLine) {
+  if (alternativeProductLine) {
     const deliveryLines = noteLines.filter(l => LOGISTICS_RE.test(l));
     const deliveryInfo = deliveryLines.length > 0 ? ` El proveedor indica: "${deliveryLines.join(" | ")}"` : "";
-    client_message = `Hemos consultado con nuestro proveedor. El modelo exacto que solicitaste (${effectiveProductName}) no está disponible actualmente, pero nos ofrecen como alternativa el **${supplierProductLine}** al precio de S/ ${final_price}.${deliveryInfo} ¿Te interesa esta opción? 😊`;
+    client_message = `Hemos consultado con nuestro proveedor. El modelo exacto que solicitaste (${effectiveProductName}) no está disponible actualmente, pero nos ofrecen como alternativa el **${alternativeProductLine}** al precio de S/ ${final_price}.${deliveryInfo} ¿Te interesa esta opción? 😊`;
   } else {
     client_message = notifyResult.message_to_client as string;
   }
