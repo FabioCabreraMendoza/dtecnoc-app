@@ -17,6 +17,7 @@ import { makeChat, FAST_MODEL, SALES_MODEL } from "@/lib/llm";
 import {
   findAndAddProductTool,
   updateOrderStatusTool,
+  saveCustomerDetailsTool,
 } from "@/lib/tools/lc/inventory-tools";
 import { ragQueryTool } from "@/lib/tools/lc/rag-tool";
 import { update_order_status, get_order_status } from "@/lib/tools/inventory";
@@ -61,6 +62,7 @@ Cuando el cliente confirme que quiere proceder (en cualquier estado con precio d
 2. Número de teléfono
 3. Dirección completa
 4. Referencia de la dirección (punto de referencia cercano)
+En cuanto tengas los 4 datos, llama save_customer_details con esos valores ANTES de pasar al PASO 5. Si el cliente no dio referencia, llama la tool igual sin ese campo.
 
 PASO 5 — LOGÍSTICA DE ENVÍO:
 Una vez que el cliente haya dado su nombre, teléfono y dirección, determina el envío:
@@ -155,6 +157,7 @@ export function ensurePaymentInfoShown(
 const ALL_TOOLS: StructuredToolInterface[] = [
   findAndAddProductTool,
   updateOrderStatusTool,
+  saveCustomerDetailsTool,
   ragQueryTool,
 ];
 const TOOL_MAP: Record<string, StructuredToolInterface> = Object.fromEntries(

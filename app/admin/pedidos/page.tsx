@@ -46,6 +46,10 @@ interface Order {
   status: string;
   total_price: string | null;
   notes: string | null;
+  customer_full_name: string | null;
+  phone: string | null;
+  address: string | null;
+  address_reference: string | null;
   items: Array<{ product: { name: string; category: string; selling_price: string | null } }>;
   chat_thread: { id: string } | null;
   updated_at: string;
@@ -160,6 +164,28 @@ export default function PedidosPage() {
                       {order.total_price && (
                         <div className="text-xs font-semibold text-green-600 mt-1">
                           S/ {order.total_price}
+                        </div>
+                      )}
+                      {(order.phone || order.address) && (
+                        <div className="mt-1 space-y-0.5 border-t border-gray-100 pt-1">
+                          {order.customer_full_name &&
+                            order.customer_full_name !== order.client.name && (
+                              <div className="text-xs text-gray-600">
+                                🧑 {order.customer_full_name}
+                              </div>
+                            )}
+                          {order.phone && (
+                            <div className="text-xs text-gray-500">📞 {order.phone}</div>
+                          )}
+                          {order.address && (
+                            <div
+                              className="text-xs text-gray-500 truncate"
+                              title={`${order.address}${order.address_reference ? ` (${order.address_reference})` : ""}`}
+                            >
+                              📍 {order.address}
+                              {order.address_reference && ` (${order.address_reference})`}
+                            </div>
+                          )}
                         </div>
                       )}
                       {displayNotes && (

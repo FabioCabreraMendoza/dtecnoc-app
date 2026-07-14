@@ -246,3 +246,29 @@ export async function update_order_status(
   const order = await prisma.order.update({ where: { id: order_id }, data });
   return { success: true, order_id: order.id, new_status: order.status };
 }
+
+/**
+ * Guarda los datos de entrega recopilados en el PASO 4 (nombre, teléfono,
+ * dirección, referencia) en campos estructurados del pedido. Antes solo vivían
+ * en el texto de la conversación y el admin no podía verlos sin abrir el chat
+ * completo.
+ */
+export async function save_customer_details(
+  order_id: string,
+  full_name: string,
+  phone: string,
+  address: string,
+  address_reference?: string
+) {
+  const order = await prisma.order.update({
+    where: { id: order_id },
+    data: {
+      customer_full_name: full_name,
+      phone,
+      address,
+      ...(address_reference ? { address_reference } : {}),
+      updated_at: new Date(),
+    },
+  });
+  return { success: true, order_id: order.id };
+}

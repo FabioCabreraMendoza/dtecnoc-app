@@ -26,7 +26,8 @@ vi.mock("@/lib/prisma", () => ({
 }));
 
 // Import después del mock para que use la versión mockeada de "@/lib/prisma".
-const { update_order_status, find_and_add_product } = await import("./inventory");
+const { update_order_status, find_and_add_product, save_customer_details } =
+  await import("./inventory");
 
 describe("update_order_status (STATUS_RANK)", () => {
   beforeEach(() => {
@@ -251,5 +252,43 @@ describe("find_and_add_product", () => {
 
     const sqlArg = queryRawUnsafe.mock.calls[0][0] as string;
     expect(sqlArg).toMatch(/ORDER BY relevance DESC/);
+  });
+});
+
+describe("save_customer_details", () => {
+  beforeEach(() => {
+    update.mockReset();
+  });
+
+  it("guarda nombre, teléfono, dirección y referencia", async () => {
+    update.mockResolvedValue({ id: "order-1" });
+
+    const result = await save_customer_details(
+      "order-1",
+      "Pepe Cortizona",
+      "123456789",
+      "Calle UPAO",
+      "Frente a UPAO"
+    );
+
+    expect(update).toHaveBeenCalledWith({
+      where: { id: "order-1" },
+      data: expect.objectContaining({
+        customer_full_name: "Pepe Cortizona",
+        phone: "123456789",
+        address: "Calle UPAO",
+        address_reference: "Frente a UPAO",
+      }),
+    });
+    expect(result).toEqual({ success: true, order_id: "order-1" });
+  });
+
+  it("no incluye address_reference en el update si no se pasó", async () => {
+    update.mockResolvedValue({ id: "order-1" });
+
+    await save_customer_details("order-1", "Pepe Cortizona", "123456789", "Calle UPAO");
+
+    const callArgs = update.mock.calls[0][0];
+    expect(callArgs.data).not.toHaveProperty("address_reference");
   });
 });
