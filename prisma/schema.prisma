@@ -32,17 +32,24 @@ model Product {
 }
 
 model Order {
-  id           String              @id @default(uuid())
-  client_id    String
-  client       User                @relation("ClientOrders", fields: [client_id], references: [id])
-  total_price  Decimal?
-  status       OrderStatus         @default(CONSULTANDO)
-  notes        String?
-  items        OrderItem[]
-  chat_thread  SupplierChat?
-  conversation ClientConversation?
-  created_at   DateTime            @default(now())
-  updated_at   DateTime            @updatedAt
+  id                 String              @id @default(uuid())
+  client_id          String
+  client             User                @relation("ClientOrders", fields: [client_id], references: [id])
+  total_price        Decimal?
+  status             OrderStatus         @default(CONSULTANDO)
+  notes              String?
+  // Datos de entrega recopilados en el PASO 4 del agente de ventas (antes solo
+  // vivían en el texto de la conversación — el admin no podía verlos sin abrir
+  // el chat completo).
+  customer_full_name String?
+  phone              String?
+  address            String?
+  address_reference  String?
+  items              OrderItem[]
+  chat_thread        SupplierChat?
+  conversation       ClientConversation?
+  created_at         DateTime            @default(now())
+  updated_at         DateTime            @updatedAt
 }
 
 model OrderItem {

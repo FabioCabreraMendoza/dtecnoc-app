@@ -4,6 +4,7 @@ import { OrderStatus } from "@prisma/client";
 import {
   find_and_add_product,
   update_order_status,
+  save_customer_details,
 } from "@/lib/tools/inventory";
 
 /**
@@ -59,6 +60,36 @@ export const updateOrderStatusTool = tool(
           "Nombre exacto del producto solicitado. Obligatorio cuando find_and_add_product " +
             "devolvió error (producto no en catálogo) y se pasa a ESPERANDO_PROVEEDOR."
         ),
+    }),
+  }
+);
+
+export const saveCustomerDetailsTool = tool(
+  async ({ order_id, full_name, phone, address, address_reference }) => {
+    const result = await save_customer_details(
+      order_id,
+      full_name,
+      phone,
+      address,
+      address_reference
+    );
+    return JSON.stringify(result);
+  },
+  {
+    name: "save_customer_details",
+    description:
+      "Guarda los datos de entrega del cliente (nombre completo, teléfono, dirección y " +
+      "referencia) en el pedido. Llámala UNA VEZ que tengas los 4 datos completos del " +
+      "PASO 4, antes o junto con avanzar a los siguientes pasos.",
+    schema: z.object({
+      order_id: z.string(),
+      full_name: z.string().describe("Nombre completo del cliente"),
+      phone: z.string().describe("Número de teléfono del cliente"),
+      address: z.string().describe("Dirección completa del cliente"),
+      address_reference: z
+        .string()
+        .optional()
+        .describe("Punto de referencia cercano a la dirección, si lo dio"),
     }),
   }
 );
