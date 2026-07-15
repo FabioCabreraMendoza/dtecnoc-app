@@ -53,7 +53,7 @@ export default function DashboardPage() {
   if (!data) return <div className="p-8 text-red-500">Error cargando datos</div>;
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-8">
       <h1 className="text-2xl font-bold text-gray-800 mb-6">Dashboard</h1>
 
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8">

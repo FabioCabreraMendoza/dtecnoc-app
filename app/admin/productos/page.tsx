@@ -90,8 +90,8 @@ export default function ProductosPage() {
   }
 
   return (
-    <div className="p-8">
-      <div className="flex items-center justify-between mb-6">
+    <div className="p-4 sm:p-8">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
         <h1 className="text-2xl font-bold text-gray-800">Catálogo de Productos</h1>
         <button
           onClick={() => {
@@ -110,7 +110,7 @@ export default function ProductosPage() {
           <h3 className="font-semibold text-gray-800 mb-4">
             {editId ? "Editar Producto" : "Nuevo Producto"}
           </h3>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="col-span-2">
               <label className="block text-xs font-medium text-gray-600 mb-1">Nombre *</label>
               <input
@@ -191,7 +191,8 @@ export default function ProductosPage() {
         <div className="text-center py-12 text-gray-400">Cargando...</div>
       ) : (
         <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[720px] text-sm">
             <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
               <tr>
                 <th className="px-4 py-3 text-left">Producto</th>
@@ -244,6 +245,7 @@ export default function ProductosPage() {
               ))}
             </tbody>
           </table>
+          </div>
           {products.length === 0 && (
             <div className="py-12 text-center text-gray-400">
               No hay productos. Agrega el primero.
