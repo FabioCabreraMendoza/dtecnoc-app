@@ -134,8 +134,8 @@ export default function ProveedoresPage() {
   }
 
   return (
-    <div className="p-8">
-      <div className="flex items-start justify-between mb-6">
+    <div className="p-4 sm:p-8">
+      <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">
             Monitor de Negociaciones B2B
@@ -144,9 +144,9 @@ export default function ProveedoresPage() {
             Hilos de cotización entre el sistema y proveedores. Haz clic en el chat para intervenir.
           </p>
         </div>
-        <div className="text-right">
-          <div className="flex flex-col gap-2 items-end">
-            <div className="flex gap-2">
+        <div className="lg:text-right">
+          <div className="flex flex-col gap-2 lg:items-end">
+            <div className="flex flex-wrap gap-2">
               <button
                 onClick={testEmail}
                 disabled={testingEmail}
@@ -169,9 +169,9 @@ export default function ProveedoresPage() {
                 {activatingWatch ? "Activando..." : "🔔 Activar Gmail Watch"}
               </button>
             </div>
-            {checkAllStatus && <p className="text-xs text-right max-w-xs">{checkAllStatus}</p>}
-            {testEmailStatus && <p className="text-xs text-right max-w-xs">{testEmailStatus}</p>}
-            {watchStatus && <p className="text-xs text-gray-500 max-w-xs text-right">{watchStatus}</p>}
+            {checkAllStatus && <p className="text-xs lg:text-right max-w-xs">{checkAllStatus}</p>}
+            {testEmailStatus && <p className="text-xs lg:text-right max-w-xs">{testEmailStatus}</p>}
+            {watchStatus && <p className="text-xs text-gray-500 max-w-xs lg:text-right">{watchStatus}</p>}
           </div>
         </div>
       </div>
@@ -196,7 +196,7 @@ export default function ProveedoresPage() {
               key={t.id}
               className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm"
             >
-              <div className="flex items-start justify-between gap-4">
+              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-3 mb-2 flex-wrap">
                     <span className="font-semibold text-gray-800 truncate">{t.product}</span>
@@ -235,8 +235,8 @@ export default function ProveedoresPage() {
                   </div>
                 </div>
 
-                <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                  <div className="text-xs text-gray-400 text-right">
+                <div className="flex flex-col items-start sm:items-end gap-2 flex-shrink-0">
+                  <div className="text-xs text-gray-400 text-left sm:text-right">
                     <div>{new Date(t.updated_at).toLocaleString("es-PE")}</div>
                   </div>
                   <span
