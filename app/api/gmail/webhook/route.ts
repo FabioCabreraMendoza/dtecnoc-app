@@ -8,6 +8,19 @@ import { prisma } from "@/lib/prisma";
 // { message: { data: "<base64 JSON>", messageId: "...", publishTime: "..." }, subscription: "..." }
 
 export async function POST(req: NextRequest) {
+  // Endpoint público por naturaleza (Pub/Sub no puede autenticarse con el JWT
+  // de admin), pero SIN esto cualquiera que descubra la URL puede dispararlo
+  // y gastar cuota real de Gmail API. Mismo patrón que CRON_SECRET: un
+  // secreto compartido en la URL que se registra en la suscripción push de
+  // Google Cloud (Settings → Push endpoint URL → agregar ?secret=...).
+  const { searchParams } = new URL(req.url);
+  const expectedSecret = process.env.GMAIL_WEBHOOK_SECRET;
+  if (expectedSecret && searchParams.get("secret") !== expectedSecret) {
+    // 200 (no 401): evita que Pub/Sub reintente indefinidamente un mensaje
+    // que nunca va a aceptarse, igual que el resto de errores de esta ruta.
+    return NextResponse.json({ status: "unauthorized" });
+  }
+
   try {
     const body = await req.json();
 

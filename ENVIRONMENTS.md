@@ -69,6 +69,7 @@ grafo pasa a `PostgresSaver`, ver [`MIGRATION.md`](MIGRATION.md)).
 | `JWT_SECRET` / `ADMIN_SECRET` | ✓ | ✓ | ✓ | distintos por entorno |
 | `GMAIL_*` | sandbox | buzón staging | buzón real | OAuth por entorno |
 | `CRON_SECRET` | — | ✓ | ✓ | protege `/api/cron/*` |
+| `GMAIL_WEBHOOK_SECRET` | — | ✓ | ✓ | protege `/api/gmail/webhook` (query param `?secret=`) |
 
 ## §8.5 — Estrategias de release
 

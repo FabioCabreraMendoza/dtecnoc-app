@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { adminFetch } from "@/lib/admin-fetch";
 
 const NAV_ITEMS = [
   { href: "/admin/dashboard", label: "Dashboard", icon: "📊" },
@@ -26,8 +27,10 @@ export default function AdminLayout({
   const [collapsed, setCollapsed] = useState(false);
 
   useEffect(() => {
-    const token = localStorage.getItem("admin_token");
-    if (!token) router.push("/login");
+    // La sesión vive en la cookie httpOnly (no hay token en localStorage que
+    // se pueda chequear directamente); se valida con una llamada liviana.
+    // adminFetch ya redirige a /login por su cuenta si la cookie no es válida.
+    adminFetch("/api/admin/me").catch(() => {});
     const saved = localStorage.getItem("admin_sidebar_collapsed");
     if (saved === "1") setCollapsed(true);
   }, [router]);
@@ -45,8 +48,9 @@ export default function AdminLayout({
     });
   }
 
-  function handleLogout() {
-    localStorage.removeItem("admin_token");
+  async function handleLogout() {
+    // La cookie httpOnly no se puede borrar con JS; se lo pide al servidor.
+    await fetch("/api/admin/logout", { method: "POST" }).catch(() => {});
     router.push("/login");
   }
 

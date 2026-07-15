@@ -23,7 +23,8 @@ export default function LoginPage() {
         setError(data.error ?? "Error de autenticación");
         return;
       }
-      localStorage.setItem("admin_token", data.token);
+      // La sesión queda en la cookie httpOnly que puso el servidor
+      // (Set-Cookie en la respuesta) — no se guarda el token en localStorage.
       router.push("/admin/dashboard");
     } catch {
       setError("Error de conexión");

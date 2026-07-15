@@ -98,11 +98,15 @@ model EmbeddingDocument {
 }
 
 model AdminUser {
-  id         String   @id @default(uuid())
-  email      String   @unique
-  password   String
-  name       String
-  created_at DateTime @default(now())
+  id                    String    @id @default(uuid())
+  email                 String    @unique
+  password              String
+  name                  String
+  created_at            DateTime  @default(now())
+  // Bloqueo de cuenta ante fuerza bruta en /api/admin/login (§ sin rate
+  // limiting previo — el endpoint no tenía ninguna protección).
+  failed_login_attempts Int       @default(0)
+  locked_until          DateTime?
 }
 
 enum Role {
