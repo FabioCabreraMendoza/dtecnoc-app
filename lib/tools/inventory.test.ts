@@ -89,6 +89,21 @@ describe("update_order_status (STATUS_RANK)", () => {
       })
     );
   });
+
+  it("deja el producto solicitado en una sola linea y sin '|'", async () => {
+    findUnique.mockResolvedValue({ status: OrderStatus.CONSULTANDO });
+    update.mockResolvedValue({ id: "order-1", status: OrderStatus.ESPERANDO_PROVEEDOR });
+
+    await update_order_status(
+      "order-1",
+      OrderStatus.ESPERANDO_PROVEEDOR,
+      "iPhone 15\r\nBcc: x@evil.com | otro"
+    );
+
+    const notes = update.mock.lastCall![0].data.notes as string;
+    expect(notes).not.toMatch(/[\r\n|]/);
+    expect(notes).toBe("Cliente solicita: iPhone 15 Bcc: x@evil.com otro");
+  });
 });
 
 describe("find_and_add_product", () => {

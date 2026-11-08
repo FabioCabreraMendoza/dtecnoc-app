@@ -52,23 +52,20 @@ describe("resolveEnv / APP_ENV", () => {
   });
 });
 
-describe("config (matriz SETTINGS por entorno)", () => {
-  it("development usa logLevel debug y proyecto dtecnoc-dev", async () => {
+describe("config por entorno", () => {
+  it("development usa proyecto dtecnoc-dev", async () => {
     const { config } = await loadConfigWith({ APP_ENV: "development" });
-    expect(config.logLevel).toBe("debug");
     expect(config.langsmithProject).toBe("dtecnoc-dev");
   });
 
-  it("production usa logLevel warn y proyecto dtecnoc-prod", async () => {
+  it("production usa proyecto dtecnoc-prod", async () => {
     const { config } = await loadConfigWith({ APP_ENV: "production" });
-    expect(config.logLevel).toBe("warn");
     expect(config.langsmithProject).toBe("dtecnoc-prod");
   });
 
-  it("todos los entornos comparten el mismo ragTopK", async () => {
-    const dev = await loadConfigWith({ APP_ENV: "development" });
-    const prod = await loadConfigWith({ APP_ENV: "production" });
-    expect(dev.config.ragTopK).toBe(prod.config.ragTopK);
+  it("staging usa proyecto dtecnoc-stg", async () => {
+    const { config } = await loadConfigWith({ APP_ENV: "staging" });
+    expect(config.langsmithProject).toBe("dtecnoc-stg");
   });
 });
 
@@ -78,7 +75,6 @@ describe("validateSecrets", () => {
     DEEPSEEK_API_KEY: "sk-test",
     GOOGLE_API_KEY: "google-test-key",
     JWT_SECRET: "jwt-test-secret",
-    ADMIN_SECRET: "admin-test-secret",
   };
   let prevEnv: NodeJS.ProcessEnv;
 

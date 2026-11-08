@@ -105,7 +105,8 @@ fallaba antes.
 
 **Consecuencias.** ➕ Comportamiento predecible y auditable; los guardrails no dependen del
 LLM. ➖ Más código de orquestación. La memoria durable sigue en `ClientConversation` (BD); el
-grafo de runtime es *stateless* (se puede inyectar un `PostgresSaver` para memoria gestionada).
+grafo de runtime es *stateless* (se puede inyectar un `PostgresSaver` para memoria gestionada; requiere instalar
+`@langchain/langgraph-checkpoint-postgres`).
 
 ---
 

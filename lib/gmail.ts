@@ -14,6 +14,9 @@ export const gmail = google.gmail({ version: "v1", auth: oauth2Client });
 
 export const GMAIL_USER = process.env.GMAIL_USER!;
 
+// Un valor de cabecera con CR/LF permitiría inyectar cabeceras (Bcc, Cc, ...).
+const oneLine = (s: string) => s.replace(/[\r\n]+/g, " ");
+
 export function buildRawEmail(params: {
   to: string;
   subject: string;
@@ -22,12 +25,12 @@ export function buildRawEmail(params: {
 }): string {
   const lines = [
     `From: DTECNOC <${GMAIL_USER}>`,
-    `To: ${params.to}`,
-    `Subject: ${params.subject}`,
+    `To: ${oneLine(params.to)}`,
+    `Subject: ${oneLine(params.subject)}`,
     `MIME-Version: 1.0`,
     `Content-Type: text/html; charset=utf-8`,
   ];
-  if (params.replyTo) lines.push(`Reply-To: ${params.replyTo}`);
+  if (params.replyTo) lines.push(`Reply-To: ${oneLine(params.replyTo)}`);
   lines.push("", params.html);
   return Buffer.from(lines.join("\r\n")).toString("base64url");
 }

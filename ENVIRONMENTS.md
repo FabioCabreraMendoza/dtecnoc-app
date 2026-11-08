@@ -11,10 +11,10 @@ entorno (nunca se versionan).
 |---------|-----------|-----------|-------|---------------|-----------|-------------------|
 | **Desarrollo** | `development` | Iteración rápida y pruebas locales | Sintéticos (seed) | `deepseek-v4-flash` | `dtecnoc-dev` | local (`npm run dev`) |
 | **Staging** | `staging` | Evaluación contra el dataset completo antes de producción | Reales anonimizados | `deepseek-v4-flash` | `dtecnoc-stg` | rama `develop` → Vercel Preview |
-| **Producción** | `production` | Tráfico real | Reales | `deepseek-v4-flash` (o `deepseek-v4-pro`) | `dtecnoc-prod` | rama `main` → Vercel Production |
+| **Producción** | `production` | Tráfico real | Reales | `deepseek-v4-flash` | `dtecnoc-prod` | rama `main` → Vercel Production |
 
-Los valores anteriores están codificados en la matriz `SETTINGS` de `lib/config.ts`.
-Cambiar `APP_ENV` cambia automáticamente modelo, proyecto LangSmith, nivel de log y `k` de RAG.
+El modelo y el `k` de RAG son iguales en todos los entornos (constantes en `lib/config.ts`).
+Cambiar `APP_ENV` solo cambia el proyecto de LangSmith.
 
 ## §8.2 — CI/CD y versionado
 
@@ -46,7 +46,7 @@ feature/* ──PR──▶ develop ──▶ Vercel Preview (staging)  ──PR
 proporcional al uso. El cron de proveedores usa Vercel Cron ([`vercel.json`](vercel.json)).
 Alternativas descartadas: Kubernetes (sobredimensionado para el volumen actual),
 self-hosted Docker (sin HA), LangGraph Platform (se puede adoptar si la memoria del
-grafo pasa a `PostgresSaver`, ver [`MIGRATION.md`](MIGRATION.md)).
+grafo pasa a `PostgresSaver` —requiere instalar `@langchain/langgraph-checkpoint-postgres`—, ver [`MIGRATION.md`](MIGRATION.md)).
 
 ## §8.4 — Configuración y secretos
 
@@ -66,7 +66,7 @@ grafo pasa a `PostgresSaver`, ver [`MIGRATION.md`](MIGRATION.md)).
 | `DEEPSEEK_API_KEY` | ✓ | ✓ | ✓ | DeepSeek (chat) |
 | `GOOGLE_API_KEY` | ✓ | ✓ | ✓ | Gemini — solo embeddings RAG |
 | `LANGSMITH_API_KEY` | ✓ | ✓ | ✓ | observabilidad |
-| `JWT_SECRET` / `ADMIN_SECRET` | ✓ | ✓ | ✓ | distintos por entorno |
+| `JWT_SECRET` | ✓ | ✓ | ✓ | distintos por entorno |
 | `GMAIL_*` | sandbox | buzón staging | buzón real | OAuth por entorno |
 | `CRON_SECRET` | — | ✓ | ✓ | protege `/api/cron/*` |
 | `GMAIL_WEBHOOK_SECRET` | — | ✓ | ✓ | protege `/api/gmail/webhook` (query param `?secret=`) |
@@ -120,7 +120,7 @@ vía Vercel CLI: **push a `main` → producción**, **PR → preview**. Pasos (u
    - `VERCEL_PROJECT_ID` — el `projectId`.
 6. **Variables de entorno en Vercel.** Proyecto → **Settings → Environment Variables**,
    por entorno (Production / Preview):
-   `APP_ENV`, `DATABASE_URL`, `DEEPSEEK_API_KEY`, `GOOGLE_API_KEY`, `JWT_SECRET`, `ADMIN_SECRET`, `CRON_SECRET`,
+   `APP_ENV`, `DATABASE_URL`, `DEEPSEEK_API_KEY`, `GOOGLE_API_KEY`, `JWT_SECRET`, `CRON_SECRET`,
    y opcionales `LANGSMITH_API_KEY` / `LANGSMITH_PROJECT` / `LANGSMITH_TRACING`,
    `GMAIL_CLIENT_ID` / `GMAIL_CLIENT_SECRET` / `GMAIL_REFRESH_TOKEN` / `GMAIL_USER` /
    `DEFAULT_SUPPLIER_EMAIL`, `GMAIL_PUBSUB_TOPIC` (solo producción). Ver [.env.example](.env.example).

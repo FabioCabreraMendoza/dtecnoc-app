@@ -1,5 +1,34 @@
 import { describe, it, expect } from "vitest";
-import { stripQuotedReply, extractBodyFromPayload } from "./gmail";
+import { stripQuotedReply, extractBodyFromPayload, buildRawEmail } from "./gmail";
+import { buildSupplierEmailHtml } from "./tools/gmail-tools";
+
+describe("buildRawEmail (inyeccion de cabeceras)", () => {
+  it("no deja que un asunto con CRLF cree cabeceras nuevas", () => {
+    const raw = Buffer.from(
+      buildRawEmail({
+        to: "proveedor@x.com",
+        subject: "Cotizacion: iPhone\r\nBcc: victima@evil.com",
+        html: "<p>hola</p>",
+      }),
+      "base64url"
+    ).toString("utf-8");
+    const headers = raw.split("\r\n\r\n")[0].split("\r\n");
+    expect(headers.some((h) => h.toLowerCase().startsWith("bcc:"))).toBe(false);
+  });
+});
+
+describe("buildSupplierEmailHtml (escape de HTML)", () => {
+  it("escapa el nombre de producto controlado por el cliente", () => {
+    const html = buildSupplierEmailHtml({
+      product_name: '<a href="https://evil.example">ver</a>',
+      quantity: 1,
+      order_id: "abc",
+      category: "SMARTPHONE",
+    });
+    expect(html).not.toContain("<a href=");
+    expect(html).toContain("&#60;a href=");
+  });
+});
 
 describe("stripQuotedReply", () => {
   it("devuelve el texto completo si no hay cita", () => {
