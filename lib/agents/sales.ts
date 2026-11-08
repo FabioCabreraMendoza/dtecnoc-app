@@ -353,7 +353,8 @@ export function buildSalesGraph(checkpointer?: BaseCheckpointSaver) {
 // Checkpointing (§3.5): el grafo de runtime es stateless — la memoria durable de
 // la conversación proviene de ClientConversation (BD), que se reconstruye e inyecta
 // como historial en cada turno. Para un despliegue con memoria gestionada por el
-// grafo (LangGraph Platform / multiusuario) se compila con un checkpointer durable:
+// grafo (LangGraph Platform / multiusuario) se compila con un checkpointer durable
+// (requiere `npm i @langchain/langgraph-checkpoint-postgres`):
 //   buildSalesGraph(PostgresSaver.fromConnString(process.env.DATABASE_URL!))
 // y se invoca pasando solo el mensaje nuevo con { configurable: { thread_id } }.
 // MemorySaver queda disponible para pruebas locales de reanudación.

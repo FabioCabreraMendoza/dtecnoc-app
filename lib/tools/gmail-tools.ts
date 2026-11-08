@@ -2,12 +2,18 @@ import { prisma } from "@/lib/prisma";
 import { sendGmail } from "@/lib/gmail";
 import { OrderStatus } from "@prisma/client";
 
-function buildSupplierEmailHtml(params: {
+const escapeHtml = (s: string) =>
+  s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+
+export function buildSupplierEmailHtml(params: {
   product_name: string;
   quantity: number;
   order_id: string;
   category: string;
 }): string {
+  const product_name = escapeHtml(params.product_name);
+  const category = escapeHtml(params.category);
+  const order_id = escapeHtml(params.order_id);
   return `
 <!DOCTYPE html>
 <html lang="es">
@@ -21,11 +27,11 @@ function buildSupplierEmailHtml(params: {
     <table style="width:100%; border-collapse: collapse; margin: 16px 0;">
       <tr style="background:#e8f0fe;">
         <td style="padding: 10px; border: 1px solid #ccc;"><strong>Producto</strong></td>
-        <td style="padding: 10px; border: 1px solid #ccc;">${params.product_name}</td>
+        <td style="padding: 10px; border: 1px solid #ccc;">${product_name}</td>
       </tr>
       <tr>
         <td style="padding: 10px; border: 1px solid #ccc;"><strong>Categoría</strong></td>
-        <td style="padding: 10px; border: 1px solid #ccc;">${params.category}</td>
+        <td style="padding: 10px; border: 1px solid #ccc;">${category}</td>
       </tr>
       <tr style="background:#e8f0fe;">
         <td style="padding: 10px; border: 1px solid #ccc;"><strong>Cantidad</strong></td>
@@ -33,7 +39,7 @@ function buildSupplierEmailHtml(params: {
       </tr>
       <tr>
         <td style="padding: 10px; border: 1px solid #ccc;"><strong>Referencia</strong></td>
-        <td style="padding: 10px; border: 1px solid #ccc; font-size: 12px; color: #666;">${params.order_id}</td>
+        <td style="padding: 10px; border: 1px solid #ccc; font-size: 12px; color: #666;">${order_id}</td>
       </tr>
     </table>
     <div style="background: #e8f4fd; border: 2px solid #1e3a5f; border-radius: 8px; padding: 16px; margin: 20px 0;">
@@ -43,7 +49,7 @@ function buildSupplierEmailHtml(params: {
         <li>Disponibilidad y tiempo de entrega</li>
       </ul>
     </div>
-    <p style="color: #666; font-size: 13px;">Referencia de pedido: ${params.order_id}</p>
+    <p style="color: #666; font-size: 13px;">Referencia de pedido: ${order_id}</p>
     <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;"/>
     <p style="font-size: 12px; color: #999;">DTECNOC — Tecnología e Instalaciones</p>
   </div>

@@ -63,7 +63,8 @@ npm run eval:langsmith   # sube dataset y ejecuta experimento en LangSmith (§5.
 - **Memoria del agente de ventas**: la fuente durable sigue siendo `ClientConversation`
   (BD), reconstruida como historial en cada turno; el grafo de runtime es *stateless*
   para evitar duplicación. Para memoria gestionada por el grafo (LangGraph Platform)
-  se compila con un `PostgresSaver` vía `buildSalesGraph(saver)` (§3.5).
+  se compila con un `PostgresSaver` vía `buildSalesGraph(saver)` (§3.5); requiere
+  instalar `@langchain/langgraph-checkpoint-postgres`.
 - **Guardrails**: se conservaron íntegros como nodos deterministas del grafo (anti
   invención de precio, JIT, auto-transición a `PAGO_PENDIENTE`). Ver `lib/agents/sales.ts`.
 - **Pendiente / futuro**: evaluación end-to-end del flujo de ventas requiere una BD

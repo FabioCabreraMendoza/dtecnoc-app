@@ -2,12 +2,20 @@ import "dotenv/config";
 import { PrismaClient } from ".prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import bcrypt from "bcryptjs";
+import { randomBytes } from "node:crypto";
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
 const prisma = new PrismaClient({ adapter });
 
 async function main() {
-  const hashedPassword = await bcrypt.hash("dtecnoc2024", 12);
+  // Datos sintéticos solo para desarrollo; nunca contra la BD de producción.
+  if (process.env.APP_ENV === "production") {
+    throw new Error("El seed no se ejecuta con APP_ENV=production.");
+  }
+  // Sin contraseña fija en el repo: se toma de ADMIN_SEED_PASSWORD o se genera una.
+  const password =
+    process.env.ADMIN_SEED_PASSWORD ?? randomBytes(12).toString("base64url");
+  const hashedPassword = await bcrypt.hash(password, 12);
 
   const admin = await prisma.adminUser.upsert({
     where: { email: "admin@dtecnoc.com" },
@@ -19,6 +27,9 @@ async function main() {
     },
   });
   console.log("Admin creado:", admin.email);
+  if (!process.env.ADMIN_SEED_PASSWORD) {
+    console.log("Contraseña generada (guárdala, no se vuelve a mostrar):", password);
+  }
 
   const products = [
     {

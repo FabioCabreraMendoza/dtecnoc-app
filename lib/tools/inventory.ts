@@ -240,8 +240,11 @@ export async function update_order_status(
     return { success: false, skipped: true, reason: `Estado actual ${current.status} es más avanzado que ${status}. No se retrocede.` };
   }
   const data: Parameters<typeof prisma.order.update>[0]["data"] = { status, updated_at: new Date() };
-  if (requested_product) {
-    data.notes = `Cliente solicita: ${requested_product}`;
+  // El texto viene del cliente (vía LLM) y acaba en el asunto/cuerpo de un correo:
+  // una sola línea, sin "|" (separador de notas) y con largo acotado.
+  const product = requested_product?.replace(/[\s|]+/g, " ").trim().slice(0, 120);
+  if (product) {
+    data.notes = `Cliente solicita: ${product}`;
   }
   const order = await prisma.order.update({ where: { id: order_id }, data });
   return { success: true, order_id: order.id, new_status: order.status };
