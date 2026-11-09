@@ -105,9 +105,8 @@ vía Vercel CLI: **push a `main` → producción**, **PR → preview**. Pasos (u
 1. **Crear el proyecto en Vercel.** En [vercel.com/new](https://vercel.com/new) importa el
    repo `dtecnoc-app`. Framework: Next.js (autodetectado). No hace falta configurar el build.
 2. **Desactivar el auto-deploy nativo de Vercel** (para que Actions sea el único que
-   despliega y no haya despliegues duplicados). En el proyecto → **Settings → Git** →
-   desactiva *Automatically deploy* (o en *Ignored Build Step* pon `exit 0` para saltar los
-   builds disparados por Git).
+   despliega y no haya despliegues duplicados). Ya está hecho en [`vercel.json`](vercel.json)
+   con `"git": { "deploymentEnabled": false }`; no hace falta tocar el panel de Vercel.
 3. **Obtener los identificadores.** Ejecuta `npx vercel link` en el repo (te pide login) →
    crea `.vercel/project.json` con `orgId` y `projectId`. O cópialos de
    *Settings → General* (Project ID) y *Settings* de la cuenta (Team/Org ID).
