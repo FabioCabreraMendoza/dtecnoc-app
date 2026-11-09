@@ -75,6 +75,43 @@ describe("ensurePaymentInfoShown", () => {
     expect(result).toContain("YAPE");
   });
 
+  // Regresión (visto en producción): cada "ya pagué" en PAGO_PENDIENTE volvía a
+  // pegar el bloque de pago completo, contradiciendo "hemos registrado tu aviso".
+  it("regresión: no repite los datos de pago si el pedido ya estaba en PAGO_PENDIENTE al inicio del turno", () => {
+    const reply = "¡Gracias! Hemos registrado tu aviso. El administrador verificará tu depósito.";
+    expect(
+      ensurePaymentInfoShown(reply, OrderStatus.PAGO_PENDIENTE, OrderStatus.PAGO_PENDIENTE)
+    ).toBe(reply);
+  });
+
+  it("agrega los datos si el pedido llegó a PAGO_PENDIENTE en este turno (venía de CONSULTANDO)", () => {
+    const result = ensurePaymentInfoShown(
+      NO_PAYMENT_TEXT,
+      OrderStatus.PAGO_PENDIENTE,
+      OrderStatus.CONSULTANDO
+    );
+    expect(result).toContain("BCP");
+  });
+
+  it("regresión: no duplica la frase de cierre si la respuesta ya la traía", () => {
+    const closing = "Avísanos cuando hayas realizado el depósito. ¡Muchas gracias! 😊";
+    const result = ensurePaymentInfoShown(
+      `Listo, tu pedido está en pago.\n\n${closing}`,
+      OrderStatus.PAGO_PENDIENTE,
+      OrderStatus.CONSULTANDO
+    );
+    expect(result.split(closing)).toHaveLength(2); // aparece exactamente una vez
+    expect(result.endsWith(closing)).toBe(true);
+    expect(result).toContain("BCP");
+  });
+
+  it("si la respuesta era solo la frase de cierre, no deja un encabezado vacío", () => {
+    const closing = "Avísanos cuando hayas realizado el depósito. ¡Muchas gracias! 😊";
+    const result = ensurePaymentInfoShown(closing, OrderStatus.PAGO_PENDIENTE, OrderStatus.CONSULTANDO);
+    expect(result.startsWith("Aquí tienes los datos de pago:")).toBe(true);
+    expect(result.split(closing)).toHaveLength(2);
+  });
+
   it("no duplica los datos de pago si la respuesta ya los incluye", () => {
     const result = ensurePaymentInfoShown(
       WITH_PAYMENT_TEXT,
