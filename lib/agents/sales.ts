@@ -127,31 +127,44 @@ export function shouldForcePagoPendiente(
   );
 }
 
-const PAYMENT_REMINDER_SUFFIX = `Aquí tienes los datos de pago:
-${PAYMENT_INFO_BLOCK}
-
-Avísanos cuando hayas realizado el depósito. ¡Muchas gracias! 😊`;
+const PAYMENT_CLOSING = "Avísanos cuando hayas realizado el depósito. ¡Muchas gracias! 😊";
 
 /**
- * Guardrail inverso al de arriba: el pedido YA está en PAGO_PENDIENTE (el LLM
- * pudo haber llamado update_order_status directamente, saltándose el PASO 6)
- * pero la respuesta nunca mostró los datos de pago — el cliente no sabría cómo
- * pagar aunque su pedido ya esté "listo". Le agrega los datos de pago al final
- * en vez de dejar al cliente sin esa información. Función pura para testear
- * sin invocar el grafo completo.
+ * Guardrail inverso al de arriba: el pedido llegó a PAGO_PENDIENTE EN ESTE TURNO
+ * (el LLM pudo haber llamado update_order_status directamente, saltándose el
+ * PASO 6) pero la respuesta nunca mostró los datos de pago — el cliente no sabría
+ * cómo pagar aunque su pedido ya esté "listo". Le agrega los datos de pago al
+ * final en vez de dejar al cliente sin esa información.
+ *
+ * `previousOrderStatus` es el estado al INICIO del turno: si el pedido ya estaba
+ * en PAGO_PENDIENTE, el cliente ya recibió los datos y no se repiten (antes cada
+ * "ya pagué" volvía a pegar el bloque completo). Si la respuesta ya traía la
+ * frase de cierre, se mueve al final para que no salga duplicada. Función pura
+ * para testear sin invocar el grafo completo.
  */
 export function ensurePaymentInfoShown(
   responseText: string,
-  currentOrderStatus: string
+  currentOrderStatus: string,
+  previousOrderStatus?: string
 ): string {
   const hasPaymentInfo =
     responseText.includes("BCP") ||
     responseText.includes("Interbank") ||
     responseText.includes("YAPE");
-  if (currentOrderStatus === OrderStatus.PAGO_PENDIENTE && !hasPaymentInfo) {
-    return `${responseText}\n\n${PAYMENT_REMINDER_SUFFIX}`;
+  if (
+    currentOrderStatus !== OrderStatus.PAGO_PENDIENTE ||
+    previousOrderStatus === OrderStatus.PAGO_PENDIENTE ||
+    hasPaymentInfo
+  ) {
+    return responseText;
   }
-  return responseText;
+  return [
+    responseText.replace(PAYMENT_CLOSING, "").trim(),
+    `Aquí tienes los datos de pago:\n${PAYMENT_INFO_BLOCK}`,
+    PAYMENT_CLOSING,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 }
 
 const ALL_TOOLS: StructuredToolInterface[] = [
@@ -170,6 +183,12 @@ const SalesState = Annotation.Root({
   order_id: Annotation<string>,
   order_status: Annotation<string>({
     reducer: (_p, n) => n,
+    default: () => "",
+  }),
+  // Estado del pedido al INICIO del turno: se fija en la primera pasada del agente
+  // (antes de cualquier tool) y no se sobrescribe, a diferencia de order_status.
+  start_status: Annotation<string>({
+    reducer: (prev, next) => prev || next,
     default: () => "",
   }),
   last_product_result: Annotation<Record<string, unknown> | null>({
@@ -214,7 +233,7 @@ async function agentNode(state: SalesStateT): Promise<Partial<SalesStateT>> {
   ];
 
   const response = await model.invoke(promptMessages);
-  return { messages: [response], order_status: status };
+  return { messages: [response], order_status: status, start_status: status };
 }
 
 // ── Nodo: ejecución de herramientas + guardrails deterministas ───────────────
@@ -313,7 +332,7 @@ async function finalizeNode(state: SalesStateT): Promise<Partial<SalesStateT>> {
   // real post-tool-calls (state.order_status es el de ANTES de este turno).
   const currentCtx = await get_order_status(state.order_id);
   if (!("error" in currentCtx)) {
-    clean = ensurePaymentInfoShown(clean, currentCtx.status);
+    clean = ensurePaymentInfoShown(clean, currentCtx.status, state.start_status);
   }
 
   return { final_response: clean || "¡Hola! ¿En qué puedo ayudarte hoy? 😊" };
