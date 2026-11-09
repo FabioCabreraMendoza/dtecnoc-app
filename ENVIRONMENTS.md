@@ -69,7 +69,7 @@ grafo pasa a `PostgresSaver` —requiere instalar `@langchain/langgraph-checkpoi
 | `JWT_SECRET` | ✓ | ✓ | ✓ | distintos por entorno |
 | `GMAIL_*` | sandbox | buzón staging | buzón real | OAuth por entorno |
 | `CRON_SECRET` | — | ✓ | ✓ | protege `/api/cron/*` |
-| `GMAIL_WEBHOOK_SECRET` | — | ✓ | ✓ | protege `/api/gmail/webhook` (query param `?secret=`) |
+| `GMAIL_WEBHOOK_SECRET` | — | ✓ | ✓ | protege `/api/gmail/webhook` (query param `?secret=`); en producción, sin él se rechaza todo |
 
 ## §8.5 — Estrategias de release
 

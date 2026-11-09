@@ -57,6 +57,27 @@ export async function sendGmail(params: {
   };
 }
 
+/** Dirección (en minúsculas) de una cabecera From: "Nombre <a@b.com>" o "a@b.com". */
+export function senderAddress(from: string): string {
+  return (from.match(/<([^>]+)>/)?.[1] ?? from).trim().toLowerCase();
+}
+
+/**
+ * ¿Este From es una respuesta del proveedor del pedido? Compara la dirección
+ * exacta con SupplierChat.supplier_email (y descarta los correos propios), para
+ * que un tercero que caiga en el hilo no pueda inyectar un precio. Falla cerrado:
+ * sin supplier_email conocido, nada cuenta como respuesta.
+ */
+export function isSupplierReply(
+  from: string,
+  supplierEmail: string | null | undefined
+): boolean {
+  if (!supplierEmail) return false;
+  const addr = senderAddress(from);
+  const own = (process.env.GMAIL_USER ?? "").trim().toLowerCase();
+  return addr === senderAddress(supplierEmail) && addr !== own;
+}
+
 type GmailPart = { mimeType?: string | null; body?: { data?: string | null } | null; parts?: GmailPart[] | null };
 
 export function extractBodyFromPayload(payload: GmailPart): string {

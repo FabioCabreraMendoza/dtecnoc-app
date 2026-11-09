@@ -96,7 +96,13 @@ export async function send_supplier_gmail(
 
 export async function find_supplier_chat_by_thread(
   gmail_thread_id: string
-): Promise<{ order_id: string; product_id: string | null; product_name: string; category: string } | null> {
+): Promise<{
+  order_id: string;
+  supplier_email: string | null;
+  product_id: string | null;
+  product_name: string;
+  category: string;
+} | null> {
   const chat = await prisma.supplierChat.findFirst({
     where: { gmail_thread_id },
     include: {
@@ -110,6 +116,7 @@ export async function find_supplier_chat_by_thread(
   const item = chat.order.items[0];
   return {
     order_id: chat.order_id,
+    supplier_email: chat.supplier_email,
     product_id: item?.product_id ?? null,
     product_name: item?.product.name ?? "Producto desconocido",
     category: item?.product.category ?? "ACCESORIO",

@@ -2,6 +2,7 @@ import {
   update_cost_price_in_db,
   calculate_final_margin,
   notify_client_price,
+  QUOTABLE_STATUSES,
 } from "@/lib/tools/supplier";
 import { prisma } from "@/lib/prisma";
 import { stripQuotedReply } from "@/lib/gmail";
@@ -51,29 +52,50 @@ export function detectAlternativeProductLine(
   return isAlternative ? candidate : null;
 }
 
-function extractPrice(text: string): number | null {
-  // Normalize currency symbols and labels
-  let clean = text
-    .replace(/S\/\s*/gi, "")
-    .replace(/soles?/gi, "")
-    .replace(/precio[:\s]*/gi, "");
+// Un número seguido de una unidad (stock, plazo, %) o pegado a una fecha no es un precio.
+const NON_PRICE_AFTER_RE =
+  /^\s*(?:(?:unidades?|unds?|piezas?|pzas?|d[ií]as?|horas?|hrs?|semanas?|meses|a[ñn]os?|gb|tb|mah)\b|%|[/-]\d)/i;
+const NON_PRICE_BEFORE_RE =
+  /(?:\d[/-]|\b(?:stock|cantidad|cant\.?|qty|tel[eé]fono|cel\.?|ref\.?|pedido)\s*:?\s*)$/i;
+// Un número marcado como importe: "S/ 85", "precio: 85", "85 soles".
+const PRICE_LABEL_BEFORE_RE =
+  /(?:S\/\.?|\bPEN|\bUSD|\$|\bprecio|\bcosto|\btotal)[^\d\n]{0,8}$/i;
+const PRICE_LABEL_AFTER_RE = /^\s*(?:soles?|PEN|USD|d[oó]lares?)\b/i;
 
-  // Convert European decimal notation (471,85) → dot notation BEFORE removing commas
-  // Pattern: digits, comma, exactly 1-2 digits, then non-digit or end
-  clean = clean.replace(/(\d+),(\d{1,2})(?=\D|$)/g, "$1.$2");
+/** "1,500" / "1.250" (miles), "471,85" / "12.5" (decimales), "1.250,50" (ambos). */
+function parseAmount(raw: string): number {
+  if (/^\d{1,3}(?:[.,]\d{3})+$/.test(raw)) return parseFloat(raw.replace(/[.,]/g, ""));
+  const dec = raw.match(/^(.*)[.,](\d{1,2})$/);
+  return dec ? parseFloat(`${dec[1].replace(/[.,]/g, "")}.${dec[2]}`) : parseFloat(raw);
+}
 
-  // Now remove remaining commas (thousands separators like 1,500)
-  clean = clean.replace(/,/g, "");
-
-  // Find all numbers in the text
-  const matches = clean.match(/\b\d+(?:\.\d{1,2})?\b/g) ?? [];
-
-  // Take the first number >= 100 as the price (avoids stock qty / days)
-  for (const m of matches) {
-    const n = parseFloat(m);
-    if (n >= 100) return n;
+/**
+ * Extrae el costo unitario del correo del proveedor. Prioriza un importe marcado
+ * ("S/ 85", "85 soles", "precio 85"), así acepta precios bajos (cables, cargadores)
+ * y no confunde stock/plazos con el precio. Sin marca, toma el primer número >= 100
+ * (o el único número que quede).
+ */
+export function extractPrice(text: string): number | null {
+  const candidates: Array<{ value: number; labeled: boolean }> = [];
+  for (const m of text.matchAll(/\d+(?:[.,]\d+)*/g)) {
+    const raw = m[0];
+    const at = m.index ?? 0;
+    const before = text.slice(Math.max(0, at - 14), at);
+    const after = text.slice(at + raw.length, at + raw.length + 12);
+    if (raw.replace(/\D/g, "").length > 8) continue; // teléfonos, RUC, etc.
+    if (NON_PRICE_AFTER_RE.test(after) || NON_PRICE_BEFORE_RE.test(before)) continue;
+    const value = parseAmount(raw);
+    if (!(value > 0)) continue;
+    candidates.push({
+      value,
+      labeled: PRICE_LABEL_BEFORE_RE.test(before) || PRICE_LABEL_AFTER_RE.test(after),
+    });
   }
-  return null;
+  const labeled = candidates.find((c) => c.labeled);
+  if (labeled) return labeled.value;
+  const big = candidates.find((c) => c.value >= 100);
+  if (big) return big.value;
+  return candidates.length === 1 ? candidates[0].value : null;
 }
 
 export async function supplierAgent(
@@ -86,7 +108,18 @@ export async function supplierAgent(
     include: { order: { include: { items: { include: { product: true } } } } },
   });
 
-  if (!chat) return { order_now_cotizado: false, followup_sent: false };
+  if (!chat || chat.is_resolved) return { order_now_cotizado: false, followup_sent: false };
+
+  // Solo se cotiza un pedido que aún espera precio. Si ya avanzó (pago, envío,
+  // cancelado...) o el admin lo cotizó a mano, cualquier correo posterior del
+  // proveedor se ignora y el hilo se cierra para que el cron no lo reprocese.
+  if (!QUOTABLE_STATUSES.includes(chat.order.status)) {
+    await prisma.supplierChat.update({
+      where: { order_id },
+      data: { is_resolved: true, updated_at: new Date() },
+    });
+    return { order_now_cotizado: false, followup_sent: false };
+  }
 
   // Limpia la cita del correo original; deja solo lo que escribió el proveedor.
   supplier_email_body = stripQuotedReply(supplier_email_body) || supplier_email_body;
@@ -138,15 +171,21 @@ export async function supplierAgent(
     effectiveProductName
   );
 
-  // 1. Save cost price (only when catalog product exists)
+  // 1. Calculate selling price with margin
+  const { final_price } = await calculate_final_margin(costPrice, effectiveCategory);
+
+  // 2. Pasar el pedido a COTIZADO. Va primero y es atómico: si otro proceso
+  //    (webhook/cron) ya lo cotizó o el pedido avanzó, no se toca nada más.
+  const notifyResult = await notify_client_price(order_id, final_price, effectiveProductName);
+  if (!notifyResult.success) {
+    return { order_now_cotizado: false, followup_sent: false };
+  }
+
+  // 3. Save cost price (only when catalog product exists) and supplier note
   if (product) {
     await update_cost_price_in_db(product.id, costPrice);
   }
 
-  // 2. Calculate selling price with margin
-  const { final_price } = await calculate_final_margin(costPrice, effectiveCategory);
-
-  // 3. Update order to COTIZADO and save supplier note
   const fullNote = [
     alternativeProductLine ? `Alternativa: ${alternativeProductLine}` : null,
     availabilityNote,
@@ -158,7 +197,6 @@ export async function supplierAgent(
       data: { notes: `Proveedor: ${fullNote}`, updated_at: new Date() },
     });
   }
-  const notifyResult = await notify_client_price(order_id, final_price, effectiveProductName);
 
   // Build client message — distinguish between exact match and alternative model
   let client_message: string;

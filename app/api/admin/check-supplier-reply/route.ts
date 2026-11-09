@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/middleware-auth";
 import { prisma } from "@/lib/prisma";
 import { gmail_v1 } from "googleapis";
-import { gmail, extractBodyFromPayload } from "@/lib/gmail";
+import { gmail, extractBodyFromPayload, isSupplierReply } from "@/lib/gmail";
 import { supplierAgent } from "@/lib/agents/supplier";
 
 function getFrom(msg: gmail_v1.Schema$Message): string {
@@ -26,8 +26,6 @@ async function handler(req: NextRequest) {
     return NextResponse.json({ status: "already_resolved", message: "La cotización ya fue procesada" });
   }
 
-  const gmailUser = (process.env.GMAIL_USER ?? "").toLowerCase();
-
   // ── Step 1: look inside the stored thread ─────────────────────────────────
   const thread = await gmail.users.threads.get({
     userId: "me",
@@ -43,8 +41,8 @@ async function handler(req: NextRequest) {
 
   let latestReply: string | null = null;
   for (const msg of threadMessages) {
-    const from = getFrom(msg).toLowerCase();
-    if (!from.includes(gmailUser)) {
+    const from = getFrom(msg);
+    if (isSupplierReply(from, chat.supplier_email)) {
       const body = extractBodyFromPayload((msg.payload ?? {}) as Parameters<typeof extractBodyFromPayload>[0]);
       console.log(`  → supplier candidate from="${from}" bodyLen=${body.trim().length}`);
       if (body.trim()) latestReply = body.trim();
@@ -65,8 +63,8 @@ async function handler(req: NextRequest) {
 
     for (const ref of inboxMessages) {
       const full = await gmail.users.messages.get({ userId: "me", id: ref.id!, format: "full" });
-      const from = getFrom(full.data).toLowerCase();
-      if (!from.includes(gmailUser)) {
+      const from = getFrom(full.data);
+      if (isSupplierReply(from, chat.supplier_email)) {
         const body = extractBodyFromPayload((full.data.payload ?? {}) as Parameters<typeof extractBodyFromPayload>[0]);
         console.log(`  → inbox candidate from="${from}" bodyLen=${body.trim().length}`);
         if (body.trim()) { latestReply = body.trim(); break; }
