@@ -4,6 +4,7 @@ import { salesAgent } from "@/lib/agents/sales";
 import { inventoryAgent } from "@/lib/agents/inventory";
 import { logisticsAgent } from "@/lib/agents/logistics";
 import { OrderStatus, Prisma } from "@prisma/client";
+import { rateLimit, clientIp } from "@/lib/rate-limit";
 
 // Vercel: da margen a la función (arranque en frío + llamada al LLM). Hobby ≤ 60 s.
 export const maxDuration = 60;
@@ -20,13 +21,30 @@ function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T
   ]);
 }
 
+// El front genera el session_id con crypto.randomUUID(); exigir ese formato hace
+// que el id sea la "llave" imposible de adivinar de la conversación (GET devuelve
+// nombre, teléfono y dirección del cliente), en vez de aceptar ids como "1" o "juan".
+const SESSION_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const MAX_MESSAGE_CHARS = 1000;
+const MAX_NAME_CHARS = 80;
+const MAX_CONVERSATION_MESSAGES = 200;
+
+function tooMany(message: string) {
+  return NextResponse.json({ error: message }, { status: 429, headers: { "Retry-After": "60" } });
+}
+
 // GET: retrieve conversation history by session_id
 export async function GET(req: NextRequest) {
+  // El front sondea cada 4 s (~15/min por pestaña): margen para varias pestañas/NAT.
+  if (!rateLimit(`chat-get:${clientIp(req)}`, 120, 60_000)) {
+    return tooMany("Demasiadas solicitudes. Intenta de nuevo en un minuto.");
+  }
+
   const { searchParams } = new URL(req.url);
   const session_id = searchParams.get("session_id");
 
-  if (!session_id) {
-    return NextResponse.json({ error: "session_id requerido" }, { status: 400 });
+  if (!session_id || !SESSION_ID_RE.test(session_id)) {
+    return NextResponse.json({ error: "session_id inválido" }, { status: 400 });
   }
 
   const conv = await prisma.clientConversation.findUnique({
@@ -60,18 +78,44 @@ export async function GET(req: NextRequest) {
 
 // POST: send a message and get SalesAgent response
 export async function POST(req: NextRequest) {
-  try {
-    const { session_id, message, client_name } = await req.json();
+  // Cada mensaje cuesta llamadas al LLM y a la BD: tope por IP contra abuso de cuota.
+  if (!rateLimit(`chat-post:${clientIp(req)}`, 20, 60_000)) {
+    return tooMany("Demasiados mensajes. Espera un momento antes de continuar.");
+  }
 
-    if (!session_id || !message) {
+  try {
+    const body = await req.json();
+    const { session_id, message } = body ?? {};
+
+    if (
+      typeof session_id !== "string" ||
+      !SESSION_ID_RE.test(session_id) ||
+      typeof message !== "string" ||
+      !message.trim()
+    ) {
       return NextResponse.json(
         { error: "session_id y message requeridos" },
         { status: 400 }
       );
     }
+    if (message.length > MAX_MESSAGE_CHARS) {
+      return NextResponse.json(
+        { error: `El mensaje no puede superar ${MAX_MESSAGE_CHARS} caracteres` },
+        { status: 400 }
+      );
+    }
+    const client_name =
+      typeof body.client_name === "string"
+        ? body.client_name.trim().slice(0, MAX_NAME_CHARS) || undefined
+        : undefined;
 
     // Get or create conversation
     let conv = await prisma.clientConversation.findUnique({ where: { session_id } });
+
+    // Tope por conversación: messages_json se reescribe completo en cada turno.
+    if (conv && Array.isArray(conv.messages_json) && conv.messages_json.length >= MAX_CONVERSATION_MESSAGES) {
+      return tooMany("Esta conversación alcanzó su límite. Inicia una nueva para continuar.");
+    }
 
     if (!conv) {
       conv = await prisma.clientConversation.create({

@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { sendGmail } from "@/lib/gmail";
 import { OrderStatus } from "@prisma/client";
+import { QUOTABLE_STATUSES } from "@/lib/tools/supplier";
 
 const escapeHtml = (s: string) =>
   s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
@@ -63,32 +64,49 @@ export async function send_supplier_gmail(
   product_name: string,
   quantity: number,
   category: string
-): Promise<{ success: boolean; gmail_thread_id?: string; error?: string }> {
+): Promise<{
+  success: boolean;
+  gmail_thread_id?: string;
+  error?: string;
+  already_sent?: boolean;
+}> {
+  // Se reserva el hilo ANTES de enviar: SupplierChat.order_id es único, así que de
+  // dos mensajes simultáneos solo uno reserva y envía (antes ambos veían "sin chat"
+  // y mandaban dos correos al proveedor). Sin gmail_thread_id el cron lo ignora.
+  let chatId: string;
+  try {
+    const chat = await prisma.supplierChat.create({
+      data: { order_id, supplier_email, messages_json: [] },
+    });
+    chatId = chat.id;
+  } catch (err) {
+    if ((err as { code?: string })?.code === "P2002") {
+      return { success: false, already_sent: true };
+    }
+    return { success: false, error: err instanceof Error ? err.message : String(err) };
+  }
+
   try {
     const subject = `Cotización requerida: ${product_name} [Ref: ${order_id.slice(0, 8)}]`;
     const html = buildSupplierEmailHtml({ product_name, quantity, order_id, category });
     const { threadId } = await sendGmail({ to: supplier_email, subject, html });
 
     // Track the negotiation thread for admin monitoring
-    const existingChat = await prisma.supplierChat.findUnique({ where: { order_id } });
-    if (!existingChat) {
-      await prisma.supplierChat.create({
-        data: { order_id, supplier_email, gmail_thread_id: threadId, messages_json: [] },
-      });
-    } else {
-      await prisma.supplierChat.update({
-        where: { id: existingChat.id },
-        data: { supplier_email, gmail_thread_id: threadId, updated_at: new Date() },
-      });
-    }
+    await prisma.supplierChat.update({
+      where: { id: chatId },
+      data: { gmail_thread_id: threadId, updated_at: new Date() },
+    });
 
-    await prisma.order.update({
-      where: { id: order_id },
+    // Con el estado en el WHERE: nunca retrocede un pedido ya cotizado, en pago o cancelado.
+    await prisma.order.updateMany({
+      where: { id: order_id, status: { in: QUOTABLE_STATUSES } },
       data: { status: OrderStatus.ESPERANDO_PROVEEDOR, updated_at: new Date() },
     });
 
     return { success: true, gmail_thread_id: threadId };
   } catch (err) {
+    // Si el correo no salió, se libera la reserva para poder reintentar.
+    await prisma.supplierChat.deleteMany({ where: { id: chatId, gmail_thread_id: null } }).catch(() => {});
     const msg = err instanceof Error ? err.message : String(err);
     return { success: false, error: msg };
   }
