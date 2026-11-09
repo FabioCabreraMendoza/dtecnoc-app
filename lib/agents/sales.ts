@@ -145,7 +145,8 @@ const PAYMENT_CLOSING = "Avísanos cuando hayas realizado el depósito. ¡Muchas
 export function ensurePaymentInfoShown(
   responseText: string,
   currentOrderStatus: string,
-  previousOrderStatus?: string
+  previousOrderStatus?: string,
+  totalPrice?: string | null
 ): string {
   const hasPaymentInfo =
     responseText.includes("BCP") ||
@@ -160,6 +161,7 @@ export function ensurePaymentInfoShown(
   }
   return [
     responseText.replace(PAYMENT_CLOSING, "").trim(),
+    totalPrice ? `Total a pagar: S/ ${totalPrice}` : "",
     `Aquí tienes los datos de pago:\n${PAYMENT_INFO_BLOCK}`,
     PAYMENT_CLOSING,
   ]
@@ -332,7 +334,12 @@ async function finalizeNode(state: SalesStateT): Promise<Partial<SalesStateT>> {
   // real post-tool-calls (state.order_status es el de ANTES de este turno).
   const currentCtx = await get_order_status(state.order_id);
   if (!("error" in currentCtx)) {
-    clean = ensurePaymentInfoShown(clean, currentCtx.status, state.start_status);
+    clean = ensurePaymentInfoShown(
+      clean,
+      currentCtx.status,
+      state.start_status,
+      currentCtx.total_price
+    );
   }
 
   return { final_response: clean || "¡Hola! ¿En qué puedo ayudarte hoy? 😊" };

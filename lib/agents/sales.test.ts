@@ -93,6 +93,27 @@ describe("ensurePaymentInfoShown", () => {
     expect(result).toContain("BCP");
   });
 
+  it("incluye el total a pagar cuando se conoce", () => {
+    const result = ensurePaymentInfoShown(
+      NO_PAYMENT_TEXT,
+      OrderStatus.PAGO_PENDIENTE,
+      OrderStatus.CONSULTANDO,
+      "120.5"
+    );
+    expect(result).toContain("Total a pagar: S/ 120.5");
+    expect(result.indexOf("Total a pagar")).toBeLessThan(result.indexOf("BCP"));
+  });
+
+  it("sin total conocido no agrega la línea de total", () => {
+    const result = ensurePaymentInfoShown(
+      NO_PAYMENT_TEXT,
+      OrderStatus.PAGO_PENDIENTE,
+      OrderStatus.CONSULTANDO,
+      null
+    );
+    expect(result).not.toContain("Total a pagar");
+  });
+
   it("regresión: no duplica la frase de cierre si la respuesta ya la traía", () => {
     const closing = "Avísanos cuando hayas realizado el depósito. ¡Muchas gracias! 😊";
     const result = ensurePaymentInfoShown(

@@ -90,6 +90,57 @@ describe("update_order_status (STATUS_RANK)", () => {
     );
   });
 
+  // Regresión (visto en producción): una compra directa de un producto en stock
+  // llegaba a PAGO_PENDIENTE con total_price = null (solo la cotización del
+  // proveedor lo fijaba), y el admin no veía el monto a verificar.
+  it("regresión: al pasar a PAGO_PENDIENTE sin total, lo calcula con los ítems del pedido", async () => {
+    findUnique.mockResolvedValue({
+      status: OrderStatus.CONSULTANDO,
+      total_price: null,
+      items: [
+        { unit_price: "15", quantity: 2 },
+        { unit_price: "90.5", quantity: 1 },
+      ],
+    });
+    update.mockResolvedValue({ id: "order-1", status: OrderStatus.PAGO_PENDIENTE });
+
+    await update_order_status("order-1", OrderStatus.PAGO_PENDIENTE);
+
+    expect(update.mock.lastCall![0].data.total_price).toBe(120.5);
+  });
+
+  it("no pisa un total ya fijado (p. ej. por la cotización del proveedor)", async () => {
+    findUnique.mockResolvedValue({
+      status: OrderStatus.COTIZADO,
+      total_price: "4560",
+      items: [{ unit_price: "100", quantity: 1 }],
+    });
+    update.mockResolvedValue({ id: "order-1", status: OrderStatus.PAGO_PENDIENTE });
+
+    await update_order_status("order-1", OrderStatus.PAGO_PENDIENTE);
+
+    expect(update.mock.lastCall![0].data).not.toHaveProperty("total_price");
+  });
+
+  it("no escribe total si los ítems no tienen precio (suma 0) ni en otros estados", async () => {
+    findUnique.mockResolvedValue({
+      status: OrderStatus.CONSULTANDO,
+      total_price: null,
+      items: [{ unit_price: null, quantity: 1 }],
+    });
+    update.mockResolvedValue({ id: "order-1", status: OrderStatus.PAGO_PENDIENTE });
+    await update_order_status("order-1", OrderStatus.PAGO_PENDIENTE);
+    expect(update.mock.lastCall![0].data).not.toHaveProperty("total_price");
+
+    findUnique.mockResolvedValue({
+      status: OrderStatus.CONSULTANDO,
+      total_price: null,
+      items: [{ unit_price: "15", quantity: 1 }],
+    });
+    await update_order_status("order-1", OrderStatus.ESPERANDO_PROVEEDOR);
+    expect(update.mock.lastCall![0].data).not.toHaveProperty("total_price");
+  });
+
   it("deja el producto solicitado en una sola linea y sin '|'", async () => {
     findUnique.mockResolvedValue({ status: OrderStatus.CONSULTANDO });
     update.mockResolvedValue({ id: "order-1", status: OrderStatus.ESPERANDO_PROVEEDOR });

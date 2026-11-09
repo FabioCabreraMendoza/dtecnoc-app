@@ -235,11 +235,28 @@ export async function update_order_status(
   status: OrderStatus,
   requested_product?: string
 ) {
-  const current = await prisma.order.findUnique({ where: { id: order_id }, select: { status: true } });
+  const current = await prisma.order.findUnique({
+    where: { id: order_id },
+    select: {
+      status: true,
+      total_price: true,
+      items: { select: { unit_price: true, quantity: true } },
+    },
+  });
   if (current && (STATUS_RANK[status] ?? 0) < (STATUS_RANK[current.status] ?? 0)) {
     return { success: false, skipped: true, reason: `Estado actual ${current.status} es más avanzado que ${status}. No se retrocede.` };
   }
   const data: Parameters<typeof prisma.order.update>[0]["data"] = { status, updated_at: new Date() };
+  // Compra directa de un producto en stock: nadie fijó total_price (solo lo hace la
+  // cotización del proveedor), así que el pedido llegaba a pago sin monto y el admin
+  // no sabía cuánto verificar. Se calcula con los ítems; un total ya fijado no se toca.
+  if (status === OrderStatus.PAGO_PENDIENTE && current && current.total_price == null) {
+    const total = (current.items ?? []).reduce(
+      (sum, i) => sum + Number(i.unit_price ?? 0) * i.quantity,
+      0
+    );
+    if (total > 0) data.total_price = total;
+  }
   // El texto viene del cliente (vía LLM) y acaba en el asunto/cuerpo de un correo:
   // una sola línea, sin "|" (separador de notas) y con largo acotado.
   const product = requested_product?.replace(/[\s|]+/g, " ").trim().slice(0, 120);
