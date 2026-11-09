@@ -1,5 +1,36 @@
 import { describe, it, expect } from "vitest";
-import { detectAlternativeProductLine } from "./supplier";
+import { detectAlternativeProductLine, extractPrice } from "./supplier";
+
+describe("extractPrice", () => {
+  it("regresión: no confunde el stock (>=100) con el precio", () => {
+    expect(extractPrice("Tenemos 150 unidades, precio S/ 1250")).toBe(1250);
+  });
+
+  it("regresión: acepta precios menores a 100 (cables, cargadores)", () => {
+    expect(extractPrice("Cable USB-C: 45 soles")).toBe(45);
+    expect(extractPrice("Precio: S/ 85.50")).toBe(85.5);
+  });
+
+  it("ignora plazos, porcentajes y fechas", () => {
+    expect(extractPrice("S/ 4200, llega en 120 horas, 18% IGV, 09/07/2026")).toBe(4200);
+  });
+
+  it("interpreta separadores de miles y decimales", () => {
+    expect(extractPrice("S/ 1,500")).toBe(1500);
+    expect(extractPrice("S/ 1.250")).toBe(1250);
+    expect(extractPrice("S/ 471,85")).toBe(471.85);
+    expect(extractPrice("S/ 1.250,50")).toBe(1250.5);
+  });
+
+  it("sin marca de importe, toma el primer número >= 100", () => {
+    expect(extractPrice("3 en stock, 1250")).toBe(1250);
+  });
+
+  it("ignora teléfonos y devuelve null si no hay precio", () => {
+    expect(extractPrice("Llámame al 987654321")).toBeNull();
+    expect(extractPrice("Sin stock por ahora")).toBeNull();
+  });
+});
 
 describe("detectAlternativeProductLine", () => {
   // Regresión: bug real encontrado en pruebas — una respuesta de una sola

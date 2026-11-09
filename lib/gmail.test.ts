@@ -1,6 +1,30 @@
 import { describe, it, expect } from "vitest";
-import { stripQuotedReply, extractBodyFromPayload, buildRawEmail } from "./gmail";
+import {
+  stripQuotedReply,
+  extractBodyFromPayload,
+  buildRawEmail,
+  isSupplierReply,
+} from "./gmail";
 import { buildSupplierEmailHtml } from "./tools/gmail-tools";
+
+describe("isSupplierReply (remitente del proveedor)", () => {
+  it("acepta la dirección exacta del proveedor, con o sin nombre", () => {
+    expect(isSupplierReply("Juan <Prov@X.com>", "prov@x.com")).toBe(true);
+    expect(isSupplierReply("prov@x.com", "prov@x.com")).toBe(true);
+  });
+
+  it("rechaza a un tercero, un dominio parecido y el caso sin supplier_email", () => {
+    expect(isSupplierReply("Atacante <evil@x.com>", "prov@x.com")).toBe(false);
+    expect(isSupplierReply("prov@x.com.evil.io", "prov@x.com")).toBe(false);
+    expect(isSupplierReply("prov@x.com", null)).toBe(false);
+  });
+
+  it("rechaza los correos propios aunque coincidan con el proveedor", () => {
+    process.env.GMAIL_USER = "dtecnoc@gmail.com";
+    expect(isSupplierReply("DTECNOC <dtecnoc@gmail.com>", "dtecnoc@gmail.com")).toBe(false);
+    delete process.env.GMAIL_USER;
+  });
+});
 
 describe("buildRawEmail (inyeccion de cabeceras)", () => {
   it("no deja que un asunto con CRLF cree cabeceras nuevas", () => {

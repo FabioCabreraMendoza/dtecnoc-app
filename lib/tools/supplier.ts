@@ -46,21 +46,33 @@ export async function calculate_final_margin(
   };
 }
 
+// Solo un pedido que aún espera precio puede pasar a COTIZADO.
+export const QUOTABLE_STATUSES: OrderStatus[] = [
+  OrderStatus.CONSULTANDO,
+  OrderStatus.ESPERANDO_PROVEEDOR,
+];
+
 export async function notify_client_price(
   order_id: string,
   final_price: number,
   product_name: string
 ) {
-  await prisma.order.update({
-    where: { id: order_id },
+  // El estado va en el WHERE: la guarda y el cambio son atómicos, así que un
+  // correo tardío del proveedor (o el webhook y el cron a la vez) no puede
+  // volver a cotizar un pedido ya cotizado, pagado o cancelado.
+  const { count } = await prisma.order.updateMany({
+    where: { id: order_id, status: { in: QUOTABLE_STATUSES } },
     data: {
       status: OrderStatus.COTIZADO,
       total_price: final_price,
       updated_at: new Date(),
     },
   });
+  if (count === 0) {
+    return { success: false as const, order_id, reason: "El pedido ya no espera cotización." };
+  }
   return {
-    success: true,
+    success: true as const,
     order_id,
     status: "COTIZADO",
     message_to_client: `¡Buenas noticias! Ya tenemos disponibilidad para ${product_name}. El precio es S/ ${final_price}. ¿Deseas proceder con la compra? 😊`,

@@ -46,10 +46,22 @@ describe("POST /api/gmail/webhook — secreto compartido", () => {
     expect(data.status).toBe("ignored");
   });
 
-  it("si GMAIL_WEBHOOK_SECRET no está configurado, no bloquea (compatibilidad local)", async () => {
+  it("si GMAIL_WEBHOOK_SECRET no está configurado, no bloquea fuera de producción (local)", async () => {
     delete process.env.GMAIL_WEBHOOK_SECRET;
     const res = await POST(req("http://localhost/api/gmail/webhook"));
     const data = await res.json();
     expect(data.status).toBe("ignored");
+  });
+
+  it("regresión: en producción sin GMAIL_WEBHOOK_SECRET rechaza todo (falla cerrado)", async () => {
+    delete process.env.GMAIL_WEBHOOK_SECRET;
+    vi.stubEnv("NODE_ENV", "production");
+    try {
+      const res = await POST(req("http://localhost/api/gmail/webhook"));
+      const data = await res.json();
+      expect(data.status).toBe("unauthorized");
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });

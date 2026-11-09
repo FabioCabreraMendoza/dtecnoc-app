@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { gmail_v1 } from "googleapis";
-import { gmail, extractBodyFromPayload } from "@/lib/gmail";
+import { gmail, extractBodyFromPayload, isSupplierReply } from "@/lib/gmail";
 import { supplierAgent } from "@/lib/agents/supplier";
 import { verifyToken } from "@/lib/auth";
 
@@ -33,8 +33,6 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  const gmailUser = (process.env.GMAIL_USER ?? "").toLowerCase();
-
   const pendingChats = await prisma.supplierChat.findMany({
     where: { is_resolved: false, gmail_thread_id: { not: null } },
     select: { order_id: true, gmail_thread_id: true, supplier_email: true },
@@ -58,8 +56,7 @@ export async function GET(req: NextRequest) {
       let latestReply: string | null = null;
 
       for (const msg of threadMessages) {
-        const from = getFrom(msg).toLowerCase();
-        if (!from.includes(gmailUser)) {
+        if (isSupplierReply(getFrom(msg), chat.supplier_email)) {
           const body = extractBodyFromPayload(
             (msg.payload ?? {}) as Parameters<typeof extractBodyFromPayload>[0]
           );
